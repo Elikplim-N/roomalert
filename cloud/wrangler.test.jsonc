@@ -1,0 +1,14 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "roomalert-receiver",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-03-10",
+	"compatibility_flags": ["nodejs_compat"],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "roomalert_db_test",
+			"database_id": "roomalert_db_test"
+		}
+	]
+}

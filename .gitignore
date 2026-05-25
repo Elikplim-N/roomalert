@@ -1,0 +1,19 @@
+# --- cloud (Node / Cloudflare Worker) ---
+node_modules/
+.wrangler/
+dist/
+.dev.vars
+*.log
+
+# --- app (Flutter / Dart) ---
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+.packages
+
+# --- editors / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.iml

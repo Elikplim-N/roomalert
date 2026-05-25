@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoomAlert - RiCH Advanced Technology</title>
+    <style>
+        :root {
+            --bg-base: #f4f7f6;
+            --bg-panel: #ffffff;
+            --bg-card: #ffffff;
+            --text-main: #2b3a42;
+            --text-muted: #6b7c85;
+            --primary: #2563eb;
+            --primary-glow: rgba(37, 99, 235, 0.2);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.2);
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.2);
+            --border: #e2e8f0;
+            --radius: 12px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Typography & Utils */
+        h1, h2, h3, h4 { margin-bottom: 0.5rem; font-weight: 600; }
+        p { color: var(--text-muted); line-height: 1.5; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .grid { display: grid; }
+        .gap-4 { gap: 1rem; }
+        .gap-6 { gap: 1.5rem; }
+        .hidden { display: none !important; }
+
+        /* Login Overlay */
+        #login-screen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(135deg, #f4f7f6 0%, #e2e8f0 100%);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000;
+        }
+        .login-box {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 2.5rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            width: 100%; max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        .login-box h2 { font-size: 1.75rem; margin-bottom: 0.5rem; color: var(--primary); }
+        .login-box p { margin-bottom: 2rem; }
+        
+        /* Form Elements */
+        .input-group { margin-bottom: 1.25rem; text-align: left; }
+        .input-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); }
+        input[type="text"], input[type="password"], input[type="number"] {
+            width: 100%; padding: 0.75rem 1rem;
+            background: var(--bg-base); border: 1px solid var(--border);
+            color: var(--text-main); border-radius: 8px;
+            font-size: 1rem; transition: var(--transition);
+        }
+        input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+        
+        button {
+            width: 100%; padding: 0.875rem;
+            background: var(--primary); color: white;
+            border: none; border-radius: 8px;
+            font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+            display: flex; justify-content: center; align-items: center; gap: 0.5rem;
+        }
+        button:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 12px var(--primary-glow); }
+        button.danger { background: var(--danger); }
+        button.danger:hover { box-shadow: 0 4px 12px var(--danger-glow); }
+
+        /* App Layout */
+        #app {
+            display: none; width: 100%; height: 100%;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px; background: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            padding: 1.5rem 0;
+            flex-shrink: 0;
+            transition: transform 0.3s ease;
+        }
+        .brand {
+            padding: 0 1.5rem 2rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;
+        }
+        .brand-icon {
+            width: 32px; height: 32px; border-radius: 8px;
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 1.2rem; box-shadow: 0 0 15px var(--primary-glow);
+        }
+        .nav-item {
+            padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem;
+            color: var(--text-muted); text-decoration: none; cursor: pointer;
+            transition: var(--transition); border-left: 3px solid transparent;
+        }
+        .nav-item:hover { color: var(--text-main); background: rgba(0,0,0,0.03); }
+        .nav-item.active {
+            color: var(--primary); background: rgba(37, 99, 235, 0.08);
+            border-left-color: var(--primary); font-weight: 500;
+        }
+        .nav-icon { width: 20px; height: 20px; fill: currentColor; }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1; overflow-y: auto; padding: 2rem;
+            background: var(--bg-base);
+        }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; }
+        .header h1 { font-size: 1.8rem; margin: 0; }
+        .status-badge {
+            background: #ffffff; color: var(--success);
+            padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.875rem;
+            display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+        /* Tab Content Zones */
+        .tab-pane { display: none; animation: fadeIn 0.4s ease forwards; }
+        .tab-pane.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card); border-radius: var(--radius);
+            padding: 1.5rem; border: 1px solid var(--border);
+            transition: var(--transition); position: relative; overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+        }
+        .card:hover { border-color: #cbd5e1; transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04); }
+        
+        .sensor-card .temp-display { font-size: 3rem; font-weight: 700; color: var(--text-main); margin: 1rem 0; }
+        .sensor-card .temp-unit { font-size: 1.5rem; color: var(--text-muted); font-weight: normal; }
+        .sensor-card .meta { display: flex; justify-content: space-between; font-size: 0.875rem; color: var(--text-muted); }
+        .sensor-card .port-badge { 
+            position: absolute; top: 1rem; right: 1rem;
+            background: var(--bg-base); color: var(--primary); padding: 0.2rem 0.6rem; border-radius: 6px; font-family: monospace; border: 1px solid var(--border); font-size: 0.75rem; font-weight: 600;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+        
+        /* Devices Grid */
+        .devices-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        .device-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+        
+        /* Analytics */
+        .stats-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem; }
+        .stat-card h3 { font-size: 0.875rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; margin-top: 0.5rem; }
+        
+        .progress-bar-container { width: 100%; height: 8px; background: var(--bg-panel); border-radius: 4px; overflow: hidden; margin-top: 1rem; }
+        .progress-bar { height: 100%; background: var(--primary); width: 0%; transition: width 1s ease; }
+        .progress-bar.warning { background: var(--warning); }
+        .progress-bar.danger { background: var(--danger); }
+
+        .chart-placeholder { height: 250px; background: var(--bg-base); border-radius: 8px; border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-muted); margin-top: 1.5rem; position: relative;}
+        .chart-bars { display: flex; align-items: flex-end; justify-content: space-around; width: 100%; height: 80%; padding: 0 1rem; }
+        .chart-bar { width: 8%; background: var(--primary); border-radius: 4px 4px 0 0; opacity: 0.7; transition: height 0.5s ease; }
+        .chart-bar:hover { opacity: 1; background: var(--success); }
+
+        /* Alerts */
+        .alert-item { padding: 1rem; border-left: 4px solid var(--warning); background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-radius: 0 var(--radius) var(--radius) 0; }
+        .alert-item.critical { border-left-color: var(--danger); }
+        .slider-container { margin: 1.5rem 0; }
+        .slider-container label { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+        input[type="range"] { width: 100%; accent-color: var(--primary); }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        @media (max-width: 768px) {
+            body, #app { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; padding: 0; border-right: none; border-bottom: none; border-top: 1px solid var(--border); display: block; order: 2; background: var(--bg-panel); z-index: 1000; }
+            .main-content { order: 1; overflow-y: auto; flex-grow: 1; padding: 1rem; }
+            .brand { display: none; }
+            .mobile-logo { display: block !important; }
+            nav { display: flex; flex-direction: row; overflow-x: auto; width: 100%; white-space: nowrap; justify-content: space-between; }
+            .nav-item { flex: 1; justify-content: center; align-items: center; padding: 0.75rem; flex-direction: column; gap: 0.2rem; font-size: 0.65rem; border-left: none; border-bottom: 3px solid transparent; }
+            .nav-item.active { border-bottom-color: var(--primary); border-left-color: transparent; }
+            .nav-item span { font-size: 0.65rem; }
+            .main-content { padding: 1rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .devices-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: flex-start; gap: 0.5rem; margin-bottom: 1.5rem; }
+            .header h1 { font-size: 1.3rem; }
+            .status-badge { font-size: 0.72rem; padding: 0.3rem 0.6rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <div class="login-box">
+            <div style="display: flex; justify-content: center; margin-bottom: 1rem;">
+                <svg width="180" height="70" viewBox="0 0 160 80" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 5 50 L 5 30 L 40 20 L 75 30" fill="none" stroke="var(--primary)" stroke-width="2.5" />
+                    <path d="M 35 50 L 5 50" fill="none" stroke="var(--primary)" stroke-width="2.5" />
+                    <rect x="25" y="30" width="16" height="16" fill="var(--primary)"/>
+                    <path d="M 33 30 v 16 M 25 38 h 16" stroke="var(--bg-card)" stroke-width="1.5"/>
+                    <path d="M 30 23 v -8 h -8 v 4" fill="none" stroke="var(--primary)" stroke-width="2.5"/>
+                    <circle cx="22" cy="19" r="3" fill="var(--primary)"/>
+                    <path d="M 50 23 v -8 h 8 v 4" fill="none" stroke="var(--primary)" stroke-width="2.5"/>
+                    <circle cx="58" cy="19" r="3" fill="var(--primary)"/>
+                    <path d="M 20 65 Q 40 10 110 42" fill="none" stroke="var(--primary)" stroke-width="1.2"/>
+                    <text x="58" y="44" font-family="'Segoe UI', Roboto, sans-serif" font-weight="300" font-size="28" fill="var(--primary)" letter-spacing="-1">RiCH</text>
+                    <text x="36" y="70" font-family="'Times New Roman', Georgia, serif" font-size="11" fill="var(--text-main)">Advanced Technology</text>
+                </svg>
+            </div>
+            <h2>Hub Admin Access</h2>
+            <p>Enter credentials to access the dashboard</p>
+            <form id="login-form">
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="username" value="admin" required>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                    Login to System
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand" style="justify-content: center; padding: 1.5rem 0;">
+                <svg width="180" height="70" viewBox="0 0 160 80" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 5 50 L 5 30 L 40 20 L 75 30" fill="none" stroke="var(--primary)" stroke-width="2.5" />
+                    <path d="M 35 50 L 5 50" fill="none" stroke="var(--primary)" stroke-width="2.5" />
+                    <rect x="25" y="30" width="16" height="16" fill="var(--primary)"/>
+                    <path d="M 33 30 v 16 M 25 38 h 16" stroke="var(--bg-card)" stroke-width="1.5"/>
+                    <path d="M 30 23 v -8 h -8 v 4" fill="none" stroke="var(--primary)" stroke-width="2.5"/>
+                    <circle cx="22" cy="19" r="3" fill="var(--primary)"/>
+                    <path d="M 50 23 v -8 h 8 v 4" fill="none" stroke="var(--primary)" stroke-width="2.5"/>
+                    <circle cx="58" cy="19" r="3" fill="var(--primary)"/>
+                    <path d="M 20 65 Q 40 10 110 42" fill="none" stroke="var(--primary)" stroke-width="1.2"/>
+                    <text x="58" y="44" font-family="'Segoe UI', Roboto, sans-serif" font-weight="300" font-size="28" fill="var(--primary)" letter-spacing="-1">RiCH</text>
+                    <text x="36" y="70" font-family="'Times New Roman', Georgia, serif" font-size="11" fill="var(--text-main)">Advanced Technology</text>
+                </svg>
+            </div>
+            <nav>
+                <a class="nav-item active" data-tab="home">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a class="nav-item" data-tab="devices">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M4 6h16v12H4zm2-4h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm2 6h8v2H8zm0 4h8v2H8z"/></svg>
+                    <span>Devices</span>
+                </a>
+                <a class="nav-item" data-tab="analytics">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l5-5 4 4 5-5"/></svg>
+                    <span>Analytics</span>
+                </a>
+                <a class="nav-item" data-tab="alerts">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+                    <span>Alerts</span>
+                </a>
+                <a class="nav-item" data-tab="settings">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+                    <span>Settings</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <div class="header">
+                <div>
+                    <div style="display:flex; align-items:center; gap:0.75rem;">
+                        <svg class="mobile-logo" style="display:none; height:32px;" width="80" viewBox="0 0 160 80" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M 5 50 L 5 30 L 40 20 L 75 30" fill="none" stroke="var(--primary)" stroke-width="2.5" />
+                            <path d="M 35 50 L 5 50" fill="none" stroke="var(--primary)" stroke-width="2.5" />
+                            <rect x="25" y="30" width="16" height="16" fill="var(--primary)"/>
+                            <path d="M 33 30 v 16 M 25 38 h 16" stroke="var(--bg-card)" stroke-width="1.5"/>
+                            <path d="M 30 23 v -8 h -8 v 4" fill="none" stroke="var(--primary)" stroke-width="2.5"/>
+                            <circle cx="22" cy="19" r="3" fill="var(--primary)"/>
+                            <path d="M 50 23 v -8 h 8 v 4" fill="none" stroke="var(--primary)" stroke-width="2.5"/>
+                            <circle cx="58" cy="19" r="3" fill="var(--primary)"/>
+                            <path d="M 20 65 Q 40 10 110 42" fill="none" stroke="var(--primary)" stroke-width="1.2"/>
+                            <text x="58" y="44" font-family="'Segoe UI', Roboto, sans-serif" font-weight="300" font-size="28" fill="var(--primary)" letter-spacing="-1">RiCH</text>
+                        </svg>
+                        <h1 id="tab-title" style="margin:0;">RoomAlert Dashboard</h1>
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-top:0.5rem;">
+                        <span id="tab-desc">Monitor live temperature data from connected sensors.</span>
+                        <span id="local-ip" style="background: var(--bg-base); padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; font-size:0.75rem; border: 1px solid var(--border); margin-left: 0.5rem;">IP Unknown</span>
+                    </p>
+                </div>
+                <div class="status-badge" id="system-status">🟢 SYSTEM ONLINE</div>
+            </div>
+            <header class="header">
+                <div class="status-badge" id="hub-status">
+                    <div class="status-dot" id="online-dot"></div>
+                    <span id="online-text">System Online</span> &middot; <span id="clock" style="font-family: monospace;">--:--:--</span>
+                </div>
+            </header>
+
+            <!-- Dashboard Tab -->
+            <div id="tab-home" class="tab-pane active">
+                <div class="grid dashboard-grid gap-6">
+                    <div class="card" style="grid-column: 1 / -1; background: var(--bg-card); display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <h2 style="margin-bottom: 0.25rem;">Auxiliary Relay Control</h2>
+                            <p style="color: var(--text-muted); font-size: 0.875rem;">Control connected auxiliary devices smoothly.</p>
+                        </div>
+                        <label class="switch" style="position: relative; display: inline-block; width: 60px; height: 34px;">
+                            <input type="checkbox" id="relay-toggle" onchange="toggleRelay(this.checked)" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider round" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px;"></span>
+                        </label>
+                        <style>
+                            .switch input:checked + .slider { background-color: var(--primary); }
+                            .switch input:focus + .slider { box-shadow: 0 0 1px var(--primary); }
+                            .switch input:checked + .slider:before { transform: translateX(26px); }
+                            .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+                        </style>
+                    </div>
+                </div>
+                
+                <h3 style="margin: 2rem 0 1rem 0;">Active Temperature Zones</h3>
+                <div class="grid dashboard-grid gap-6" id="active-sensors-container">
+                    <!-- Sensor Cards injected via JS -->
+                </div>
+                <div id="no-sensors" class="card hidden" style="text-align: center; padding: 3rem;">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="var(--border)" stroke-width="2" style="margin-bottom: 1rem;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    <h3 style="color: var(--text-muted);">No Active Sensors</h3>
+                    <p>Connect a supported sensor to one of the available ports.</p>
+                </div>
+            </div>
+
+            <!-- Devices Tab -->
+            <div id="tab-devices" class="tab-pane">
+                <div class="alert-item" style="border-left-color: var(--primary);">
+                    <div>
+                        <strong>Port Management</strong>
+                        <p style="margin-top: 0.25rem; font-size: 0.875rem;">Manage the 6 physical ports on the IoT Hub. You can rename zones and monitor connection status.</p>
+                    </div>
+                </div>
+                <div class="grid devices-grid gap-6" id="all-ports-container">
+                    <!-- 6 Ports injected via JS -->
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div id="tab-analytics" class="tab-pane">
+                <div class="grid stats-grid gap-6">
+                    <div class="card stat-card">
+                        <h3>Avg Temperature</h3>
+                        <div class="value">24.5<span style="font-size: 1rem; color: var(--text-muted)">°C</span></div>
+                    </div>
+                    <div class="card stat-card">
+                        <h3>Peak Today</h3>
+                        <div class="value" style="color: var(--warning)">28.2<span style="font-size: 1rem; color: var(--text-muted)">°C</span></div>
+                    </div>
+                    <div class="card stat-card">
+                        <h3>Total Readings</h3>
+                        <div class="value">14,204</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="flex justify-between items-center">
+                        <h2>SD Card Storage</h2>
+                        <span id="sd-percentage" style="font-weight: bold; color: var(--primary);">45% Used</span>
+                    </div>
+                    <p>Capacity: 16GB | Used: 7.2GB | Free: 8.8GB</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="sd-bar" style="width: 45%;"></div>
+                    </div>
+                    <div class="flex gap-4" style="margin-top: 1.5rem;">
+                        <button onclick="downloadData()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                            Download CSV
+                        </button>
+                        <button class="danger" onclick="clearData()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Format / Clear Log
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>24h Temperature Trends</h2>
+                    <p>Aggregated view across active zones.</p>
+                    <div class="chart-placeholder">
+                        <div class="chart-bars" id="trend-bars">
+                            <!-- Bars injected by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts Tab -->
+            <div id="tab-alerts" class="tab-pane">
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
+                        <h2>Alarm Configuration</h2>
+                        <button style="width: auto; padding: 0.5rem 1rem;" class="danger" onclick="triggerTestBuzzer()">Test Buzzer</button>
+                    </div>
+                    <p>Set the global or per-room temperature thresholds. If a threshold is crossed, the local buzzer is triggered.</p>
+                    
+                    <div class="slider-container" style="margin-top: 2rem;">
+                        <label>
+                            <span>Global Max Alert Threshold</span>
+                            <span id="max-val-display" style="color: var(--danger); font-weight: bold;">125°C</span>
+                        </label>
+                        <input type="range" id="max-temp" min="-55" max="125" value="125" oninput="document.getElementById('max-val-display').innerText = this.value + '°C'">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <label>
+                            <span>Global Min Alert Threshold</span>
+                            <span id="min-val-display" style="color: var(--primary); font-weight: bold;">-55°C</span>
+                        </label>
+                        <input type="range" id="min-temp" min="-55" max="125" value="-55" oninput="document.getElementById('min-val-display').innerText = this.value + '°C'">
+                    </div>
+                    
+                    <button style="margin-top: 1rem;" onclick="saveThresholds()">Save Rules</button>
+                </div>
+
+                <h3 style="margin-bottom: 1rem;">Recent Alerts Log</h3>
+                <div id="alert-history">
+                    <div class="alert-item critical">
+                        <div>
+                            <strong>Port 2 (Server Room) - High Temperature</strong>
+                            <div style="font-size: 0.875rem; color: var(--text-muted);">Exceeded 30°C max threshold. Peak: 32.1°C</div>
+                        </div>
+                        <span style="font-size: 0.875rem; color: var(--text-muted);">2 hrs ago</span>
+                    </div>
+                    <div class="alert-item">
+                        <div>
+                            <strong>Buzzer Tested</strong>
+                            <div style="font-size: 0.875rem; color: var(--text-muted);">Admin triggered manual alarm check.</div>
+                        </div>
+                        <span style="font-size: 0.875rem; color: var(--text-muted);">1 day ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="tab-settings" class="tab-pane">
+                <div class="grid gap-6" style="grid-template-columns: repeat(auto-fit, minmax(min(400px,100%), 1fr));">
+                    <div class="card">
+                        <h2>Wi-Fi Configuration</h2>
+                        <p style="margin-bottom: 1.5rem;">Connect the Hub to an existing Wi-Fi router for broader network access.</p>
+                        <div class="input-group">
+                            <label>Network Name (SSID)</label>
+                            <input type="text" id="wifi-ssid" placeholder="Ex: MyHomeNetwork">
+                        </div>
+                        <div class="input-group" style="margin-top: 1rem;">
+                            <label>Wi-Fi Password</label>
+                            <input type="password" id="wifi-pass" placeholder="Enter password">
+                        </div>
+                        <button style="margin-top: 1.5rem;" onclick="saveWifi()">Save & Reboot</button>
+                    </div>
+
+                    <div class="card">
+                        <h2>Admin Credentials</h2>
+                        <p style="margin-bottom: 1.5rem;">Change the dashboard login password. Minimum 8 characters.</p>
+                        <div class="input-group">
+                            <label>Current Password</label>
+                            <input type="password" placeholder="Enter current">
+                        </div>
+                        <div class="input-group">
+                            <label>New Password</label>
+                            <input type="password" placeholder="Enter new">
+                        </div>
+                        <div class="input-group">
+                            <label>Confirm Password</label>
+                            <input type="password" placeholder="Confirm new">
+                        </div>
+                        <button onclick="alert('Credentials Updated Successfully!')">Update Credentials</button>
+                    </div>
+
+                    <div class="card">
+                        <h2>Network AP Configuration</h2>
+                        <p style="margin-bottom: 1.5rem;">Configure the Arduino Access Point.</p>
+                        <div class="input-group">
+                            <label>SSID (Network Name)</label>
+                            <input type="text" value="Mega_Pro_Dashboard">
+                        </div>
+                        <div class="input-group">
+                            <label>AP Password</label>
+                            <input type="text" value="12345678">
+                        </div>
+                        <div class="input-group">
+                            <label>Hub IP Address</label>
+                            <input type="text" value="192.168.4.1" disabled style="opacity: 0.5">
+                        </div>
+                        <button onclick="alert('Network settings saved! Please restart the device.')">Save Network Settings</button>
+                    </div>
+
+                    <div class="card">
+                        <h2>Hub Clock Synchronization</h2>
+                        <p style="margin-bottom: 1.5rem;">The hub uses a physical RTC battery to maintain time. If the time drifts, sync it with your currently connected browser.</p>
+                        <button onclick="syncTime()" style="background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border);">Sync with Browser Time</button>
+                    </div>
+
+                    <div class="card">
+                        <h2>Display Preferences</h2>
+                        <p style="margin-bottom: 1.5rem;">Choose your preferred temperature unit. This is saved to your browser.</p>
+                        <div class="input-group">
+                            <label>Temperature Unit</label>
+                            <select id="unit-select" onchange="changeUnit(this.value)" style="width: 100%; padding: 0.75rem 1rem; background: var(--bg-base); border: 1px solid var(--border); color: var(--text-main); border-radius: 8px; font-size: 1rem;">
+                                <option value="C">Celsius (°C)</option>
+                                <option value="F">Fahrenheit (°F)</option>
+                            </select>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="flex justify-between items-center" style="margin-bottom: 0.5rem;">
+                        <div>
+                            <h2 style="margin-bottom:0.25rem;">Sensor Calibration</h2>
+                            <p style="font-size:0.8rem;">Fine-tune each zone's reading by adding or subtracting a fixed offset.</p>
+                        </div>
+                    </div>
+                    <div id="calibration-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 1rem;"></div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem; text-align: center; border-color: var(--danger);">
+                    <h3 style="color: var(--danger); margin-bottom: 0.5rem;">System Power</h3>
+                    <p style="margin-bottom: 1.5rem;">Reboot the Arduino Mega gracefully.</p>
+                    <button class="danger" style="width: auto; margin: 0 auto; padding: 0.75rem 2rem;" onclick="rebootSystem()">Reboot Hub</button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // --- State & Preferences ---
+        const PWD_MOCK = "admin123";
+        const TOTAL_PORTS = 6;
+        let currentUnit = localStorage.getItem('tempUnit') || 'C';
+        let systemBootTime = Date.now() - (1000 * 60 * 60 * 24 * 3 + 1000 * 60 * 45); // Uptime mock
+        
+        // Mock State for 6 Ports
+        let ports = [
+            { id: 1, name: "Living Room", connected: true, temp: 24.5, lastUpdate: Date.now() - 2000 },
+            { id: 2, name: "Server Rack", connected: true, temp: 29.8, lastUpdate: Date.now() - 5000 },
+            { id: 3, name: "Unassigned", connected: false, temp: null, lastUpdate: null },
+            { id: 4, name: "Kitchen", connected: true, temp: 26.1, lastUpdate: Date.now() - 15000 },
+            { id: 5, name: "Unassigned", connected: false, temp: null, lastUpdate: null },
+            { id: 6, name: "Outdoor", connected: true, temp: 18.2, lastUpdate: Date.now() - 1000 }
+        ];
+
+        // --- Init & UI Logic ---
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const pass = document.getElementById('password').value;
+            if (pass !== "") { // accept any in mock to proceed easily
+                document.getElementById('login-screen').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('app').style.display = 'flex';
+                    // initialize unit toggle UI element
+                    document.getElementById('unit-select').value = currentUnit;
+                    initDashboard();
+                }, 500);
+            }
+        });
+
+        // --- Temperature Utilities ---
+        function convertTemp(celsiusValue) {
+            if (currentUnit === 'F') return (celsiusValue * 9/5) + 32;
+            return celsiusValue; // Arduino defaults to C
+        }
+        function getUnitString() {
+            return currentUnit === 'F' ? '°F' : '°C';
+        }
+        function changeUnit(newUnit) {
+            currentUnit = newUnit;
+            localStorage.setItem('tempUnit', currentUnit);
+            // Re-render UI immediately
+            renderActiveSensors();
+            renderAllPorts();
+            // Since this is mock HTML, we re-parse alerts and stats too
+            document.querySelector('.stat-card:nth-child(1) .value').innerHTML = `${convertTemp(24.5).toFixed(1)}<span style="font-size: 1rem; color: var(--text-muted)">${getUnitString()}</span>`;
+            document.querySelector('.stat-card:nth-child(2) .value').innerHTML = `${convertTemp(28.2).toFixed(1)}<span style="font-size: 1rem; color: var(--text-muted)">${getUnitString()}</span>`;
+        }
+
+        // Tab Switching
+        const navItems = document.querySelectorAll('.nav-item');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        const tabTexts = {
+            'home': { title: 'RoomAlert Dashboard', desc: 'Monitor live temperature data from connected sensors.' },
+            'devices': { title: 'Device Management', desc: 'Configure and monitor all physical sensor ports.'},
+            'analytics': { title: 'Analytics & Memory', desc: 'View data trends and manage SD card storage.' },
+            'alerts': { title: 'Alerts Configuration', desc: 'Configure thresholds and buzzer triggers.' },
+            'settings': { title: 'System Settings', desc: 'Configure user credentials and network.' }
+        };
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const tab = item.getAttribute('data-tab');
+                
+                // Active state
+                navItems.forEach(n => n.classList.remove('active'));
+                item.classList.add('active');
+                
+                // Show content
+                tabPanes.forEach(p => p.classList.remove('active'));
+                document.getElementById('tab-' + tab).classList.add('active');
+                
+                // Update header
+                document.getElementById('tab-title').innerText = tabTexts[tab].title;
+                document.getElementById('tab-desc').innerText = tabTexts[tab].desc;
+            });
+        });
+
+        function initDashboard() {
+            renderActiveSensors();
+            renderAllPorts();
+            drawMockChart();
+            
+            // Simulation loop to update temps
+            setInterval(simulateTempFluctuations, 3000);
+        }
+
+        // --- Render Functions ---
+        function renderActiveSensors() {
+            const container = document.getElementById('active-sensors-container');
+            const noSensors = document.getElementById('no-sensors');
+            container.innerHTML = '';
+            
+            const activePorts = ports.filter(p => p.connected);
+            
+            if (activePorts.length === 0) {
+                noSensors.classList.remove('hidden');
+                return;
+            } else {
+                noSensors.classList.add('hidden');
+            }
+
+            activePorts.forEach(port => {
+                const uptimeHrs = Math.floor((Date.now() - (systemBootTime + (port.id * 10000))) / (1000 * 60 * 60));
+                
+                let colorClass = 'var(--text-main)';
+                let glowClass = 'none';
+                if (port.temp > 28) { colorClass = 'var(--warning)'; }
+                if (port.temp > 30) { 
+                    colorClass = 'var(--danger)'; 
+                    glowClass = '0 0 15px var(--danger-glow)';
+                }
+
+                container.innerHTML += `
+                    <div class="card sensor-card" id="sensor-card-${port.id}">
+                        <div class="port-badge">PORT ${port.id}</div>
+                        <h3 style="color: var(--primary);">${port.name}</h3>
+                        <div class="temp-display" style="color: ${colorClass}; text-shadow: ${glowClass};">
+                            <span id="temp-val-${port.id}">${convertTemp(port.temp).toFixed(1)}</span><span class="temp-unit">${getUnitString()}</span>
+                        </div>
+                        <div class="meta">
+                            <span><span style="color: var(--success); font-weight: bold; margin-right: 4px;">●</span>Online</span>
+                            <span>Uptime: ${uptimeHrs}h</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderAllPorts() {
+            const container = document.getElementById('all-ports-container');
+            container.innerHTML = '';
+
+            ports.forEach(port => {
+                const statusHtml = port.connected 
+                    ? `<span style="color: var(--success); font-weight: bold;">CONNECTED ( ${convertTemp(port.temp).toFixed(1)}${getUnitString()} )</span>`
+                    : `<span style="color: var(--text-muted);">DISCONNECTED</span>`;
+                
+                const btnState = port.connected ? '' : 'disabled style="opacity:0.5"';
+
+                container.innerHTML += `
+                    <div class="card">
+                        <div class="device-row">
+                            <h3>Port ${port.id}</h3>
+                            ${statusHtml}
+                        </div>
+                        <div class="input-group" style="margin-top: 1rem;">
+                            <label>Zone Name</label>
+                            <input type="text" value="${port.name}" id="rename-${port.id}" />
+                        </div>
+                        <div class="flex gap-4" style="margin-top: 1rem;">
+                            <button onclick="renamePort(${port.id})" style="padding: 0.5rem;">Save Name</button>
+                            <button class="danger" style="padding: 0.5rem;" ${btnState} onclick="disconnectPort(${port.id})">Drop</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- Interactions & Mocks ---
+        function simulateTempFluctuations() {
+            ports.forEach(port => {
+                if(port.connected) {
+                    // Random float between -0.2 and 0.2
+                    const change = (Math.random() * 0.4) - 0.2;
+                    port.temp = port.temp + change;
+                    
+                    // Update UI if on screen
+                    const el = document.getElementById(`temp-val-${port.id}`);
+                    if(el) {
+                        el.innerText = convertTemp(port.temp).toFixed(1);
+                        
+                        // color updates
+                        const card = document.getElementById(`sensor-card-${port.id}`);
+                        const display = card.querySelector('.temp-display');
+                        if (port.temp > 30) {
+                            display.style.color = 'var(--danger)';
+                            display.style.textShadow = '0 0 15px var(--danger-glow)';
+                        } else if (port.temp > 28) {
+                            display.style.color = 'var(--warning)';
+                            display.style.textShadow = 'none';
+                        } else {
+                            display.style.color = 'var(--text-main)';
+                            display.style.textShadow = 'none';
+                        }
+                    }
+                }
+            });
+            // Update devices tab connection readings too if needed, but skipped for brevity
+        }
+
+        function renamePort(id) {
+            const newName = document.getElementById(`rename-${id}`).value;
+            const port = ports.find(p => p.id === id);
+            if(port) {
+                port.name = newName;
+                renderActiveSensors();
+                // feedback
+                const btn = document.querySelector(`#rename-${id}`).nextElementSibling;
+                const oldText = btn.innerText;
+                btn.innerText = "Saved!";
+                btn.style.background = "var(--success)";
+                setTimeout(() => { btn.innerText = oldText; btn.style.background = ""; }, 1500);
+            }
+        }
+
+        function disconnectPort(id) {
+            const port = ports.find(p => p.id === id);
+            if(port && confirm(`Simulate physical disconnection of Port ${id}?`)) {
+                port.connected = false;
+                port.temp = null;
+                renderActiveSensors();
+                renderAllPorts();
+            }
+        }
+
+        async function triggerTestBuzzer() {
+            try {
+                const res = await fetch('/api/buzzer', { method: 'POST', headers: {'Authorization': authHeader} });
+                if(res.ok) alert("Buzzer Triggered!");
+            } catch(e) {}
+        }
+
+        async function saveWifi() {
+            const ssid = document.getElementById('wifi-ssid').value;
+            const pass = document.getElementById('wifi-pass').value;
+            if(!ssid) return alert("Please enter an SSID.");
+            const res = await fetch('/api/wifi?ssid=' + encodeURIComponent(ssid) + '&pass=' + encodeURIComponent(pass), {
+                method: 'POST', headers: {'Authorization': authHeader}
+            });
+            if(res.ok) {
+                alert("Wi-Fi credentials saved! Hub is rebooting to connect to the new network. Please reconnect manually in 15 seconds.");
+                setTimeout(() => location.reload(), 15000);
+            } else { alert("Failed to save Wi-Fi."); }
+        }
+
+        async function saveThresholds() {
+            const maxT = document.getElementById('max-temp').value;
+            const minT = document.getElementById('min-temp').value;
+            try {
+                const res = await fetch('/api/thresholds?max=' + maxT + '&min=' + minT, {
+                    method: 'POST',
+                    headers: {'Authorization': authHeader}
+                });
+                if(res.ok) alert("Threshold rules saved to Hub EEPROM!");
+            } catch(e) { alert("Failed to save rules."); }
+        }
+
+        async function toggleRelay(state) {
+            try {
+                const res = await fetch('/api/relay', {
+                    method: 'POST',
+                    headers: {'Authorization': authHeader, 'Content-Type': 'application/json'},
+                    body: JSON.stringify({state: state})
+                });
+                if(!res.ok) throw new Error("Network response was not ok");
+            } catch(e) {
+                alert("Failed to toggle relay.");
+                document.getElementById('relay-toggle').checked = !state; // Revert UI
+            }
+        }
+        
+        async function syncTime() {
+            const unixTime = Math.floor(Date.now() / 1000);
+            try {
+                const res = await fetch('/api/sync_time', {
+                    method: 'POST',
+                    headers: {'Authorization': authHeader, 'Content-Type': 'application/json'},
+                    body: JSON.stringify({unixtime: unixTime})
+                });
+                if(res.ok) alert("Hub RTC synchronized with browser time!");
+            } catch(e) { alert("Failed to sync time."); }
+        }
+
+        async function downloadData() {
+            try {
+                const res = await fetch('/api/sd/download', { headers: {'Authorization': authHeader} });
+                if(res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    // Use Content-Disposition filename from server, or fallback to timestamped name
+                    const cd = res.headers.get('Content-Disposition');
+                    let fname = 'RoomAlert_' + new Date().toISOString().slice(0,10) + '.csv';
+                    if (cd) {
+                        const match = cd.match(/filename="?([^"]+)"?/);
+                        if (match) fname = match[1];
+                    }
+                    a.download = fname;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                } else if (res.status === 404) {
+                    alert("No data logged yet. The log file is empty or missing.");
+                } else {
+                    alert("Download failed. Please try again.");
+                }
+            } catch (e) { alert("Network error. Is the Hub connected?"); }
+        }
+
+        async function clearData() {
+            if(confirm("WARNING: This will erase all history datalogs on the SD card. Proceed?")) {
+                try {
+                    const res = await fetch('/api/sd/clear', { method: 'POST', headers: {'Authorization': authHeader} });
+                    if(res.ok) {
+                        document.getElementById('sd-bar').style.width = '0%';
+                        document.getElementById('sd-percentage').innerText = '0% Used';
+                        alert("Storage Erased Successfully.");
+                    }
+                } catch(e) { alert("Format failed."); }
+            }
+        }
+
+        function rebootSystem() {
+            if(confirm("Reboot the mega? Your connection will drop.")) {
+                document.documentElement.innerHTML = "<body style='background:#f4f7f6; color:#2b3a42; display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif;'><h1>Rebooting... Please wait reconnecting to AP.</h1></body>";
+            }
+        }
+
+        function drawMockChart() {
+            const container = document.getElementById('trend-bars');
+            for(let i=0; i<12; i++) {
+                const height = 30 + Math.random() * 60; // 30% to 90%
+                container.innerHTML += `<div class="chart-bar" style="height: ${height}%;" title="Value: ${height.toFixed(1)}"></div>`;
+            }
+        }
+    </script>
+</body>
+</html>
