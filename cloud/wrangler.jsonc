@@ -19,7 +19,7 @@
 			"binding": "DB",
 			"database_name": "roomalert_db",
 			"database_id": "c39f95b4-bd2a-4352-8a46-781dbfbaf8fe",
-			"remote": true
+			"remote": false
 		}
 	]
 	/**

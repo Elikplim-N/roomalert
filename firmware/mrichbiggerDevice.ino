@@ -32,6 +32,31 @@ static_assert(NUM_SENSORS >= 1 && NUM_SENSORS <= MAX_SENSORS,
 #define CLOUD_DEVICE_ID "roomalert-6w-01"  // unique id for this unit in the cloud DB
 #define CLOUD_UPLOAD_INTERVAL_MS 60000UL   // how often to push (default 60s)
 
+String cloudUrl = CLOUD_URL;
+String cloudDeviceId = CLOUD_DEVICE_ID;
+
+void loadCloudConfig() {
+    if (!SD.exists("/cloud.txt")) {
+        File f = SD.open("/cloud.txt", FILE_WRITE);
+        if (f) {
+            f.println(cloudUrl);
+            f.println(cloudDeviceId);
+            f.close();
+            Serial.println("[SD] Created /cloud.txt with defaults");
+        }
+        return;
+    }
+    File f = SD.open("/cloud.txt");
+    if (f) {
+        if (f.available()) cloudUrl = f.readStringUntil('\n');
+        if (f.available()) cloudDeviceId = f.readStringUntil('\n');
+        f.close();
+        cloudUrl.trim();
+        cloudDeviceId.trim();
+        Serial.println("[SD] Loaded /cloud.txt cloud config");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Hardware Pin Definitions
 // ---------------------------------------------------------------------------
@@ -291,6 +316,37 @@ void setupServer() {
     request->send(200, "application/json", "{\"status\":\"ok\"}");
   });
 
+  // 5.5 RTC Time Sync (JSON Body parses epoch)
+  server.on("/api/sync_time", HTTP_POST, [](AsyncWebServerRequest *request) {
+    // Handled in body callback below
+  }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!isAuthorized(request)) return;
+    String body = "";
+    for (size_t i = 0; i < len; i++) {
+      body += (char)data[i];
+    }
+    int idx = body.indexOf("\"unixtime\":");
+    if (idx != -1) {
+        int start = idx + 11;
+        while (start < body.length() && (body[start] == ' ' || body[start] == ':')) {
+            start++;
+        }
+        int end = start;
+        while (end < body.length() && isDigit(body[end])) {
+            end++;
+        }
+        String epochStr = body.substring(start, end);
+        uint32_t epoch = epochStr.toInt();
+        if (epoch > 0) {
+            rtc.adjust(DateTime(epoch));
+            Serial.println("[RTC] Clock synchronized successfully via API: " + epochStr);
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
+            return;
+        }
+    }
+    request->send(400, "application/json", "{\"status\":\"error\"}");
+  });
+
   // 6. SD Download — Dynamically prepend header row with current zone names
   server.on("/api/sd/download", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (!isAuthorized(request))
@@ -422,7 +478,7 @@ void setupServer() {
 // Build the telemetry payload and POST it to the Worker. Disconnected ports
 // report temp:null/conn:false so the cloud mirrors exactly NUM_SENSORS ports.
 void uploadToCloud() {
-  if (strlen(CLOUD_URL) == 0) return;        // cloud disabled
+  if (cloudUrl.length() == 0) return;        // cloud disabled
   if (WiFi.status() != WL_CONNECTED) return; // no upstream link (AP-only)
 
   DateTime now = rtc.now();
@@ -430,7 +486,7 @@ void uploadToCloud() {
   sprintf(isoTime, "%04d-%02d-%02dT%02d:%02d:%02dZ", now.year(), now.month(),
           now.day(), now.hour(), now.minute(), now.second());
 
-  String payload = "{\"deviceId\":\"" CLOUD_DEVICE_ID "\",\"timestamp\":\"";
+  String payload = "{\"deviceId\":\"" + cloudDeviceId + "\",\"timestamp\":\"";
   payload += isoTime;
   payload += "\",\"sensors\":[";
   for (int i = 0; i < NUM_SENSORS; i++) {
@@ -447,7 +503,7 @@ void uploadToCloud() {
   WiFiClientSecure client;
   client.setInsecure(); // skip cert pinning; payload is non-sensitive telemetry
   HTTPClient http;
-  if (http.begin(client, CLOUD_URL)) {
+  if (http.begin(client, cloudUrl)) {
     http.addHeader("Content-Type", "application/json");
     int code = http.POST(payload);
     Serial.printf("[CLOUD] POST -> %d\n", code);
@@ -497,9 +553,10 @@ void setup() {
     Serial.println("!!! SD Fail - Check CS Pin 5 and Card Voltage");
   } else {
     Serial.println("SD Card: Online.");
-    loadZoneNames(); // Restore custom zone names from SD
-    loadOffsets();   // Restore sensor calibration offsets from SD
-    loadWifi();      // Restore router Wi-Fi credentials from SD
+    loadZoneNames();   // Restore custom zone names from SD
+    loadOffsets();     // Restore sensor calibration offsets from SD
+    loadWifi();        // Restore router Wi-Fi credentials from SD
+    loadCloudConfig(); // Restore cloud configuration from SD
   }
 
   // 3. Setup WiFi Mode (AP + Station fallback logic)

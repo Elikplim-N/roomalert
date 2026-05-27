@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Hardware ceiling shared with the firmware (RoomAlert 6W) and the cloud
 // receiver: a unit reports between 1 and this many DS18B20 ports.
@@ -65,6 +66,63 @@ class GatewayProvider extends ChangeNotifier {
   bool _isPolling = false;
   String? _lastError;
 
+  // C++ Hardware Telemetry Fields
+  bool _relayState = false;
+  int _uptimeSecs = 0;
+  int _sdCap = 0;
+  int _sdUsed = 0;
+  double _alarmMax = 125.0;
+  double _alarmMin = -55.0;
+  List<double> _offsets = List.filled(maxSensors, 0.0);
+
+  bool get relayState => _relayState;
+  int get uptimeSecs => _uptimeSecs;
+  int get sdCap => _sdCap;
+  int get sdUsed => _sdUsed;
+  double get alarmMax => _alarmMax;
+  double get alarmMin => _alarmMin;
+  List<double> get offsets => _offsets;
+
+  GatewayProvider() {
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      final savedType = prefs.getString('connection_type');
+      if (savedType != null) {
+        _type = ConnectionType.values.firstWhere(
+          (e) => e.name == savedType,
+          orElse: () => ConnectionType.simulated,
+        );
+      }
+      _ipAddress = prefs.getString('ip_address') ?? '192.168.4.1';
+      _wifiUser = prefs.getString('wifi_user') ?? 'admin';
+      _wifiPass = prefs.getString('wifi_pass') ?? 'admin';
+      _cloudUrl = prefs.getString('cloud_url') ?? '';
+      _cloudDeviceId = prefs.getString('cloud_device_id') ?? 'roomalert-6w-01';
+      _simulatedSensorCount = prefs.getInt('simulated_sensor_count') ?? 6;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading settings: $e');
+    }
+  }
+
+  Future<void> _saveSetting(String key, dynamic value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (value is String) {
+        await prefs.setString(key, value);
+      } else if (value is int) {
+        await prefs.setInt(key, value);
+      }
+    } catch (e) {
+      debugPrint('Error saving setting $key: $e');
+    }
+  }
+
   GatewayState get state => _state;
   ConnectionType get type => _type;
   String get ipAddress => _ipAddress;
@@ -85,32 +143,39 @@ class GatewayProvider extends ChangeNotifier {
     if (_type == newType) return;
     disconnect();
     _type = newType;
+    _saveSetting('connection_type', newType.name);
     notifyListeners();
   }
 
   void setIpAddress(String ip) {
     _ipAddress = ip;
+    _saveSetting('ip_address', ip);
     notifyListeners();
   }
 
   void setWifiCredentials(String user, String pass) {
     _wifiUser = user;
     _wifiPass = pass;
+    _saveSetting('wifi_user', user);
+    _saveSetting('wifi_pass', pass);
     notifyListeners();
   }
 
   void setCloudUrl(String url) {
     _cloudUrl = url.trim();
+    _saveSetting('cloud_url', _cloudUrl);
     notifyListeners();
   }
 
   void setCloudDeviceId(String id) {
     _cloudDeviceId = id.trim();
+    _saveSetting('cloud_device_id', _cloudDeviceId);
     notifyListeners();
   }
 
   void setSimulatedSensorCount(int count) {
     _simulatedSensorCount = count.clamp(1, maxSensors);
+    _saveSetting('simulated_sensor_count', _simulatedSensorCount);
     notifyListeners();
   }
 
@@ -175,6 +240,9 @@ class GatewayProvider extends ChangeNotifier {
           conn: true,
         ),
       );
+      _uptimeSecs += 2;
+      _sdCap = 32;
+      _sdUsed = (15 + math.sin(_uptimeSecs / 100) * 3).toInt();
       _pushSnapshot(TelemetrySnapshot(timestamp: DateTime.now(), ports: ports));
       await Future.delayed(const Duration(seconds: 2));
     }
@@ -193,6 +261,25 @@ class GatewayProvider extends ChangeNotifier {
 
         if (res.statusCode == 200) {
           final data = json.decode(res.body) as Map<String, dynamic>;
+
+          // Parse hardware variables
+          _relayState = data['relay'] == true;
+          _uptimeSecs = data['uptime'] as int? ?? 0;
+          if (data['sd'] != null) {
+            final sdData = data['sd'] as Map<String, dynamic>;
+            _sdCap = (sdData['cap'] as num?)?.toInt() ?? 0;
+            _sdUsed = (sdData['used'] as num?)?.toInt() ?? 0;
+          }
+          if (data['thresholds'] != null) {
+            final th = data['thresholds'] as Map<String, dynamic>;
+            _alarmMax = (th['max'] as num?)?.toDouble() ?? 125.0;
+            _alarmMin = (th['min'] as num?)?.toDouble() ?? -55.0;
+          }
+          if (data['offsets'] != null) {
+            final rawOffsets = data['offsets'] as List;
+            _offsets = rawOffsets.map((o) => (o as num).toDouble()).toList();
+          }
+
           final rawPorts = (data['ports'] as List?) ?? const [];
           final ports = rawPorts.map((p) {
             final m = p as Map<String, dynamic>;
@@ -294,6 +381,153 @@ class GatewayProvider extends ChangeNotifier {
     if (_state == GatewayState.connected || _state == GatewayState.connecting) {
       _state = GatewayState.error;
       notifyListeners();
+    }
+  }
+
+  // --- ESP32 Hardware Remote Actions --------------------------------------
+
+  Future<void> toggleRelay() async {
+    _relayState = !_relayState;
+    notifyListeners();
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        final stateVal = _relayState ? '1' : '0';
+        final res = await http.post(
+          Uri.parse('http://$_ipAddress/api/relay?state=$stateVal'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body) as Map<String, dynamic>;
+          _relayState = data['relay'] == true;
+        }
+      } catch (e) {
+        debugPrint('Error toggling relay: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> testBuzzer() async {
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/buzzer'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error testing buzzer: $e');
+      }
+    }
+  }
+
+  Future<void> saveAlarmRules(double maxT, double minT) async {
+    _alarmMax = maxT;
+    _alarmMin = minT;
+    notifyListeners();
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/thresholds?max=$maxT&min=$minT'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error saving thresholds: $e');
+      }
+    }
+  }
+
+  Future<void> saveOffset(int portId, double offsetVal) async {
+    if (portId >= 1 && portId <= _offsets.length) {
+      _offsets[portId - 1] = offsetVal;
+      notifyListeners();
+    }
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/offset?id=$portId&val=$offsetVal'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error saving offset: $e');
+      }
+    }
+  }
+
+  Future<void> renamePort(int portId, String newName) async {
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/rename?id=$portId&name=${Uri.encodeComponent(newName)}'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error renaming port: $e');
+      }
+    }
+  }
+
+  Future<void> clearSDLog() async {
+    _sdUsed = 0;
+    notifyListeners();
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/sd/clear'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error clearing SD log: $e');
+      }
+    }
+  }
+
+  Future<void> syncTime() async {
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        final epoch = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/sync_time'),
+          headers: {'Authorization': auth, 'Content-Type': 'application/json'},
+          body: json.encode({'unixtime': epoch}),
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error syncing clock: $e');
+      }
+    }
+  }
+
+  Future<void> rebootHub() async {
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/reboot'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error rebooting hub: $e');
+      }
+    }
+  }
+
+  Future<void> saveWifiConfig(String ssid, String pass) async {
+    if (_type == ConnectionType.wifi) {
+      try {
+        final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
+        await http.post(
+          Uri.parse('http://$_ipAddress/api/wifi?ssid=${Uri.encodeComponent(ssid)}&pass=${Uri.encodeComponent(pass)}'),
+          headers: {'Authorization': auth},
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Error saving Wi-Fi: $e');
+      }
     }
   }
 }
