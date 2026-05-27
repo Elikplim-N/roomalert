@@ -64,6 +64,9 @@ class GatewayProvider extends ChangeNotifier {
   TelemetrySnapshot? _current;
   int _selectedPort = 1;
   bool _isPolling = false;
+  // Bumped on every connect()/disconnect() so a stale polling loop from a
+  // previous connection exits instead of running in parallel with the new one.
+  int _pollGeneration = 0;
   String? _lastError;
 
   // C++ Hardware Telemetry Fields
@@ -71,8 +74,10 @@ class GatewayProvider extends ChangeNotifier {
   int _uptimeSecs = 0;
   int _sdCap = 0;
   int _sdUsed = 0;
-  double _alarmMax = 125.0;
-  double _alarmMin = -55.0;
+  // Warning thresholds: any online probe outside [min, max] is flagged. In
+  // Wi-Fi mode these are overwritten by the device's own configured values.
+  double _alarmMax = 25.0;
+  double _alarmMin = 10.0;
   List<double> _offsets = List.filled(maxSensors, 0.0);
 
   bool get relayState => _relayState;
@@ -104,6 +109,8 @@ class GatewayProvider extends ChangeNotifier {
       _cloudUrl = prefs.getString('cloud_url') ?? '';
       _cloudDeviceId = prefs.getString('cloud_device_id') ?? 'roomalert-6w-01';
       _simulatedSensorCount = prefs.getInt('simulated_sensor_count') ?? 6;
+      _alarmMax = prefs.getDouble('alarm_max') ?? 25.0;
+      _alarmMin = prefs.getDouble('alarm_min') ?? 10.0;
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading settings: $e');
@@ -117,6 +124,8 @@ class GatewayProvider extends ChangeNotifier {
         await prefs.setString(key, value);
       } else if (value is int) {
         await prefs.setInt(key, value);
+      } else if (value is double) {
+        await prefs.setDouble(key, value);
       }
     } catch (e) {
       debugPrint('Error saving setting $key: $e');
@@ -138,6 +147,11 @@ class GatewayProvider extends ChangeNotifier {
 
   List<SensorPort> get ports => _current?.ports ?? const [];
   int get connectedCount => ports.where((p) => p.conn).length;
+
+  // Threshold classification used across the UI (gauge, port grid, alerts).
+  bool isHot(double? temp) => temp != null && temp > _alarmMax;
+  bool isCold(double? temp) => temp != null && temp < _alarmMin;
+  bool isOutOfRange(double? temp) => isHot(temp) || isCold(temp);
 
   void setConnectionType(ConnectionType newType) {
     if (_type == newType) return;
@@ -187,19 +201,23 @@ class GatewayProvider extends ChangeNotifier {
   Future<void> connect() async {
     _state = GatewayState.connecting;
     _lastError = null;
+
+    // Invalidate any in-flight polling loop before starting a fresh one, so
+    // repeated connect() calls don't stack up multiple concurrent pollers.
+    final gen = ++_pollGeneration;
+    _isPolling = true;
     notifyListeners();
 
-    _isPolling = true;
     switch (_type) {
       case ConnectionType.simulated:
         _state = GatewayState.connected;
-        _startSimulation();
+        _startSimulation(gen);
         break;
       case ConnectionType.wifi:
-        _startWifiPolling();
+        _startWifiPolling(gen);
         break;
       case ConnectionType.cloud:
-        _startCloudPolling();
+        _startCloudPolling(gen);
         break;
     }
     notifyListeners();
@@ -207,9 +225,12 @@ class GatewayProvider extends ChangeNotifier {
 
   void disconnect() {
     _isPolling = false;
+    _pollGeneration++;
     _state = GatewayState.disconnected;
     notifyListeners();
   }
+
+  bool _isCurrent(int gen) => _isPolling && gen == _pollGeneration;
 
   void _pushSnapshot(TelemetrySnapshot snapshot) {
     _current = snapshot;
@@ -223,11 +244,11 @@ class GatewayProvider extends ChangeNotifier {
 
   // --- Simulated -----------------------------------------------------------
 
-  void _startSimulation() async {
+  void _startSimulation(int gen) async {
     final rng = math.Random();
     final temps =
         List<double>.generate(_simulatedSensorCount, (i) => 22.0 + i * 1.5);
-    while (_isPolling && _type == ConnectionType.simulated) {
+    while (_isCurrent(gen) && _type == ConnectionType.simulated) {
       for (int i = 0; i < temps.length; i++) {
         temps[i] += (rng.nextDouble() - 0.5);
       }
@@ -250,9 +271,9 @@ class GatewayProvider extends ChangeNotifier {
 
   // --- Direct Wi-Fi (device /api/status) -----------------------------------
 
-  void _startWifiPolling() async {
+  void _startWifiPolling(int gen) async {
     final auth = 'Basic ${base64Encode(utf8.encode('$_wifiUser:$_wifiPass'))}';
-    while (_isPolling && _type == ConnectionType.wifi) {
+    while (_isCurrent(gen) && _type == ConnectionType.wifi) {
       try {
         final res = await http.get(
           Uri.parse('http://$_ipAddress/api/status'),
@@ -306,8 +327,8 @@ class GatewayProvider extends ChangeNotifier {
 
   // --- Cloud (Worker /api/telemetry) ---------------------------------------
 
-  void _startCloudPolling() async {
-    while (_isPolling && _type == ConnectionType.cloud) {
+  void _startCloudPolling(int gen) async {
+    while (_isCurrent(gen) && _type == ConnectionType.cloud) {
       if (_cloudUrl.isEmpty) {
         _markError('Cloud URL not set');
         await Future.delayed(const Duration(seconds: 3));
@@ -425,6 +446,8 @@ class GatewayProvider extends ChangeNotifier {
   Future<void> saveAlarmRules(double maxT, double minT) async {
     _alarmMax = maxT;
     _alarmMin = minT;
+    _saveSetting('alarm_max', maxT);
+    _saveSetting('alarm_min', minT);
     notifyListeners();
     if (_type == ConnectionType.wifi) {
       try {

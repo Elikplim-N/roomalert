@@ -66,11 +66,13 @@ async function handleIngest(request: Request, env: Env): Promise<Response> {
 
   for (let i = 0; i < MAX_PORTS; i++) {
     const reading = sensors[i] ?? null;
+    const rawTemp = reading ? reading.temp : null;
+    const temp =
+      rawTemp == null || !Number.isFinite(Number(rawTemp))
+        ? null
+        : Number(rawTemp);
     columns.push(`port_${i + 1}_temp`, `port_${i + 1}_conn`);
-    values.push(
-      reading ? reading.temp ?? null : null,
-      reading ? (reading.conn ? 1 : 0) : 0,
-    );
+    values.push(temp, reading && reading.conn ? 1 : 0);
   }
 
   const placeholders = columns.map(() => '?').join(', ');

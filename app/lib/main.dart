@@ -331,7 +331,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         selectedItemColor: accentColor,
-        unselectedItemColor: Colors.white38,
+        unselectedItemColor: const Color(0xFF94A3B8),
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
         selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
@@ -565,7 +565,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 flex: 4,
                 child: Column(
                   children: [
-                    _buildGaugeCard(selectedPortData),
+                    _buildGaugeCard(selectedPortData, gateway),
                     const SizedBox(height: 16),
                     _buildPortsCard(gateway),
                     const SizedBox(height: 16),
@@ -594,7 +594,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Mobile / Tablet Stacked Layout
       return Column(
         children: [
-          _buildGaugeCard(selectedPortData),
+          _buildGaugeCard(selectedPortData, gateway),
           const SizedBox(height: 16),
           _buildPortsCard(gateway),
           const SizedBox(height: 16),
@@ -632,100 +632,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             childAspectRatio: 1.35,
           ),
           itemCount: gateway.ports.length,
-          itemBuilder: (context, idx) {
-            final p = gateway.ports[idx];
-            final TextEditingController renameController = TextEditingController(text: p.name);
-            return Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: glassBorder),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: p.conn ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'PORT #${p.port}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF8A99AD),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        p.conn && p.temp != null ? '${p.temp!.toStringAsFixed(1)}°C' : '--.-',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: p.conn ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: renameController,
-                    decoration: InputDecoration(
-                      labelText: 'Zone Name',
-                      labelStyle: const TextStyle(color: Color(0xFF8A99AD), fontSize: 11),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF10B981)),
-                      ),
-                    ),
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B)),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 32,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      onPressed: () {
-                        final newName = renameController.text.trim();
-                        if (newName.isNotEmpty) {
-                          gateway.renamePort(p.port, newName);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Zone name updated to "$newName"')),
-                          );
-                        }
-                      },
-                      child: const Text('Save Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+          itemBuilder: (context, idx) => _PortRenameCard(
+            key: ValueKey('rename_${gateway.ports[idx].port}'),
+            port: gateway.ports[idx],
+            gateway: gateway,
+          ),
         ),
       ],
     );
@@ -758,9 +669,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Automated safety threshold is set at > 25°C. Critical environment alerts will record below in real-time.',
-          style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+        Text(
+          'Safe range is ${gateway.alarmMin.toStringAsFixed(1)}°C – ${gateway.alarmMax.toStringAsFixed(1)}°C. Probes outside this band are recorded below in real-time.',
+          style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
         ),
         const SizedBox(height: 24),
         if (alertItems.isEmpty)
@@ -1122,7 +1033,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     if (gateway.type == ConnectionType.wifi) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Telemetry CSV log is hosted at http://${gateway.ipAddress}/telemetry.csv!'),
+                          content: Text('Telemetry CSV log is hosted at http://${gateway.ipAddress}/api/sd/download'),
                           action: SnackBarAction(
                             label: 'Copy IP',
                             textColor: Colors.white,
@@ -1206,74 +1117,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             itemBuilder: (context, idx) {
               final p = gateway.ports[idx];
               final currentOffset = gateway.offsets.length > idx ? gateway.offsets[idx] : 0.0;
-              final TextEditingController controller = TextEditingController(text: currentOffset.toStringAsFixed(2));
-
-              return Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Port #${p.port} (${p.name})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        const SizedBox(height: 2),
-                        Text(
-                          p.conn && p.temp != null
-                              ? 'Active Raw Temp: ${(p.temp! - currentOffset).toStringAsFixed(1)}°C'
-                              : 'Sensor disconnected',
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 100,
-                    height: 38,
-                    child: TextField(
-                      controller: controller,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                      decoration: InputDecoration(
-                        suffixText: '°C',
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: accentColor),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    ),
-                    onPressed: () {
-                      final val = double.tryParse(controller.text);
-                      if (val != null) {
-                        gateway.saveOffset(p.port, val);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Port #${p.port} calibration offset saved to ${val > 0 ? "+" : ""}${val.toStringAsFixed(2)}°C!'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    },
-                    child: const Text('Save', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
+              return _CalibrationRow(
+                key: ValueKey('cal_${p.port}'),
+                port: p,
+                offset: currentOffset,
+                gateway: gateway,
               );
             },
           ),
@@ -1283,9 +1131,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildSystemUtilitiesCard(GatewayProvider gateway) {
-    final ssidController = TextEditingController();
-    final passController = TextEditingController();
-
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -1336,65 +1181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 4),
           const Text('Provide SSID and Password to connect the node to local network routers.', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: ssidController,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    labelText: 'Wi-Fi SSID',
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: accentColor)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: TextField(
-                  controller: passController,
-                  obscureText: true,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    labelText: 'Wi-Fi Password',
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: accentColor)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                onPressed: () {
-                  final ssid = ssidController.text.trim();
-                  final pass = passController.text.trim();
-                  if (ssid.isNotEmpty) {
-                    gateway.saveWifiConfig(ssid, pass);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Saved network router configuration for SSID: $ssid!'), behavior: SnackBarBehavior.floating),
-                    );
-                    ssidController.clear();
-                    passController.clear();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('SSID field cannot be empty!'), behavior: SnackBarBehavior.floating),
-                    );
-                  }
-                },
-                child: const Text('Save Wi-Fi', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
+          _WifiCredsForm(gateway: gateway),
           const Divider(color: Color(0xFFE2E8F0), height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1489,12 +1276,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildGaugeCard(SensorPort p) {
+  Widget _buildGaugeCard(SensorPort p, GatewayProvider gateway) {
     final tempVal = p.temp ?? 0.0;
     // Map 0 - 50 deg C to 0.0 - 1.0 progress
     final double progress = (tempVal.clamp(0.0, 50.0)) / 50.0;
-    final isHot = tempVal > 25.0;
     final isDisconn = !p.conn;
+    final isHot = !isDisconn && gateway.isHot(p.temp);
+    final isCold = !isDisconn && gateway.isCold(p.temp);
+    final isAlarm = isHot || isCold;
 
     return Container(
       width: double.infinity,
@@ -1507,7 +1296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           BoxShadow(
             color: (isDisconn
                     ? Colors.transparent
-                    : isHot
+                    : isAlarm
                         ? dangerColor
                         : accentColor)
                 .withOpacity(0.02),
@@ -1530,7 +1319,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   progress: isDisconn ? 0.0 : progress,
                   color: isDisconn
                       ? const Color(0xFFCBD5E1)
-                      : isHot
+                      : isAlarm
                           ? dangerColor
                           : accentColor,
                 ),
@@ -1559,7 +1348,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 decoration: BoxDecoration(
                   color: (isDisconn
                           ? const Color(0xFFCBD5E1)
-                          : isHot
+                          : isAlarm
                               ? dangerColor
                               : successColor)
                       .withOpacity(0.12),
@@ -1567,7 +1356,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   border: Border.all(
                     color: (isDisconn
                             ? const Color(0xFFCBD5E1)
-                            : isHot
+                            : isAlarm
                                 ? dangerColor
                                 : successColor)
                         .withOpacity(0.25),
@@ -1579,12 +1368,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Icon(
                       isDisconn
                           ? Icons.cloud_off
-                          : isHot
+                          : isAlarm
                               ? Icons.warning_amber_rounded
                               : Icons.check_circle_outline,
                       color: isDisconn
                           ? const Color(0xFF64748B)
-                          : isHot
+                          : isAlarm
                               ? dangerColor
                               : successColor,
                       size: 14,
@@ -1595,13 +1384,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? 'DISCONNECTED'
                           : isHot
                               ? 'HIGH TEMP'
-                              : 'STABLE',
+                              : isCold
+                                  ? 'LOW TEMP'
+                                  : 'STABLE',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                         color: isDisconn
                             ? const Color(0xFF64748B)
-                            : isHot
+                            : isAlarm
                                 ? dangerColor
                                 : successColor,
                       ),
@@ -1670,7 +1461,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             itemBuilder: (context, idx) {
               final p = gateway.ports[idx];
               final isSel = p.port == gateway.selectedPort;
-              final isHot = (p.temp ?? 0.0) > 25.0;
+              final isHot = gateway.isOutOfRange(p.temp);
 
               return GestureDetector(
                 onTap: () => gateway.setSelectedPort(p.port),
@@ -1916,11 +1707,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           desc: '${p.name} (Port #${p.port}) connection lost.',
           type: 'error',
         ));
-      } else if (p.temp != null && p.temp! > 25.0) {
+      } else if (gateway.isHot(p.temp)) {
         list.add(AlertLogItem(
           title: 'High Temp Warning',
           time: 'Active',
-          desc: '${p.name} temperature reached ${p.temp!.toStringAsFixed(1)}°C (Limit: 25.0°C)',
+          desc: '${p.name} temperature reached ${p.temp!.toStringAsFixed(1)}°C (Max: ${gateway.alarmMax.toStringAsFixed(1)}°C)',
+          type: 'error',
+        ));
+      } else if (gateway.isCold(p.temp)) {
+        list.add(AlertLogItem(
+          title: 'Low Temp Warning',
+          time: 'Active',
+          desc: '${p.name} temperature dropped to ${p.temp!.toStringAsFixed(1)}°C (Min: ${gateway.alarmMin.toStringAsFixed(1)}°C)',
           type: 'error',
         ));
       }
@@ -2135,7 +1933,7 @@ class GaugePainter extends CustomPainter {
 
     // Track Background arc
     final bgPaint = Paint()
-      ..color = Colors.white.withOpacity(0.04)
+      ..color = const Color(0xFFE2E8F0)
       ..strokeWidth = 14
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -2190,24 +1988,77 @@ class GaugePainter extends CustomPainter {
 // --- Field Helpers ---
 
 Widget _field(String label, String value, ValueChanged<String> onChanged, {bool obscure = false, String? hint}) {
-  return TextField(
-    controller: TextEditingController(text: value)
-      ..selection = TextSelection.collapsed(offset: value.length),
-    obscureText: obscure,
-    onChanged: onChanged,
-    style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
-    decoration: InputDecoration(
-      labelText: label,
-      hintText: hint,
-      labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: glassBorder)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: glassBorder)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: accentColor)),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    ),
-  );
+  return _LiveSettingField(label: label, value: value, onChanged: onChanged, obscure: obscure, hint: hint);
+}
+
+// A text field that owns a stable controller so live telemetry rebuilds (which
+// fire every couple of seconds) don't recreate the controller and wipe what the
+// user is typing or jump the cursor to the end.
+class _LiveSettingField extends StatefulWidget {
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+  final bool obscure;
+  final String? hint;
+  const _LiveSettingField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.obscure = false,
+    this.hint,
+  });
+
+  @override
+  State<_LiveSettingField> createState() => _LiveSettingFieldState();
+}
+
+class _LiveSettingFieldState extends State<_LiveSettingField> {
+  late final TextEditingController _controller;
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveSettingField old) {
+    super.didUpdateWidget(old);
+    // Pick up external changes only when the user isn't actively editing.
+    if (!_focus.hasFocus && widget.value != _controller.text) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      focusNode: _focus,
+      obscureText: widget.obscure,
+      onChanged: widget.onChanged,
+      style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+      decoration: InputDecoration(
+        labelText: widget.label,
+        hintText: widget.hint,
+        labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: glassBorder)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: glassBorder)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: accentColor)),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+    );
+  }
 }
 
 class AlertLogItem {
@@ -2217,6 +2068,339 @@ class AlertLogItem {
   final String type;
 
   AlertLogItem({required this.title, required this.time, required this.desc, required this.type});
+}
+
+// Devices view: one card per port with a stable rename field.
+class _PortRenameCard extends StatefulWidget {
+  final SensorPort port;
+  final GatewayProvider gateway;
+  const _PortRenameCard({required this.port, required this.gateway});
+
+  @override
+  State<_PortRenameCard> createState() => _PortRenameCardState();
+}
+
+class _PortRenameCardState extends State<_PortRenameCard> {
+  late final TextEditingController _controller;
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.port.name);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PortRenameCard old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && widget.port.name != _controller.text) {
+      _controller.text = widget.port.name;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.port;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: p.conn ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'PORT #${p.port}',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF8A99AD),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                p.conn && p.temp != null ? '${p.temp!.toStringAsFixed(1)}°C' : '--.-',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: p.conn ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _controller,
+            focusNode: _focus,
+            decoration: InputDecoration(
+              labelText: 'Zone Name',
+              labelStyle: const TextStyle(color: Color(0xFF8A99AD), fontSize: 11),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFF10B981)),
+              ),
+            ),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B)),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 32,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                final newName = _controller.text.trim();
+                if (newName.isNotEmpty) {
+                  widget.gateway.renamePort(p.port, newName);
+                  FocusScope.of(context).unfocus();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Zone name updated to "$newName"')),
+                  );
+                }
+              },
+              child: const Text('Save Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Settings view: one calibration row per port with a stable offset field.
+class _CalibrationRow extends StatefulWidget {
+  final SensorPort port;
+  final double offset;
+  final GatewayProvider gateway;
+  const _CalibrationRow({required this.port, required this.offset, required this.gateway});
+
+  @override
+  State<_CalibrationRow> createState() => _CalibrationRowState();
+}
+
+class _CalibrationRowState extends State<_CalibrationRow> {
+  late final TextEditingController _controller;
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.offset.toStringAsFixed(2));
+  }
+
+  @override
+  void didUpdateWidget(covariant _CalibrationRow old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && widget.offset != old.offset) {
+      _controller.text = widget.offset.toStringAsFixed(2);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.port;
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Port #${p.port} (${p.name})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 2),
+              Text(
+                p.conn && p.temp != null
+                    ? 'Active Raw Temp: ${(p.temp! - widget.offset).toStringAsFixed(1)}°C'
+                    : 'Sensor disconnected',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 100,
+          height: 38,
+          child: TextField(
+            controller: _controller,
+            focusNode: _focus,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(
+              suffixText: '°C',
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: accentColor),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accentColor,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          ),
+          onPressed: () {
+            final val = double.tryParse(_controller.text);
+            if (val != null) {
+              widget.gateway.saveOffset(p.port, val);
+              FocusScope.of(context).unfocus();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Port #${p.port} calibration offset saved to ${val > 0 ? "+" : ""}${val.toStringAsFixed(2)}°C!'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Enter a valid number for the offset.'), behavior: SnackBarBehavior.floating),
+              );
+            }
+          },
+          child: const Text('Save', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+}
+
+// Settings view: Wi-Fi station credentials with stable input fields.
+class _WifiCredsForm extends StatefulWidget {
+  final GatewayProvider gateway;
+  const _WifiCredsForm({required this.gateway});
+
+  @override
+  State<_WifiCredsForm> createState() => _WifiCredsFormState();
+}
+
+class _WifiCredsFormState extends State<_WifiCredsForm> {
+  final _ssidController = TextEditingController();
+  final _passController = TextEditingController();
+
+  @override
+  void dispose() {
+    _ssidController.dispose();
+    _passController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _ssidController,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Wi-Fi SSID',
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: accentColor)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: TextField(
+            controller: _passController,
+            obscureText: true,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Wi-Fi Password',
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: accentColor)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accentColor,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          onPressed: () {
+            final ssid = _ssidController.text.trim();
+            final pass = _passController.text.trim();
+            if (ssid.isNotEmpty) {
+              widget.gateway.saveWifiConfig(ssid, pass);
+              FocusScope.of(context).unfocus();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Saved network router configuration for SSID: $ssid!'), behavior: SnackBarBehavior.floating),
+              );
+              _ssidController.clear();
+              _passController.clear();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('SSID field cannot be empty!'), behavior: SnackBarBehavior.floating),
+              );
+            }
+          },
+          child: const Text('Save Wi-Fi', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
 }
 
 // --- Disconnected / Connection Selection Modal ---
@@ -2239,17 +2423,17 @@ class _DisconnectedView extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: glassBorder),
             ),
-            child: const Icon(Icons.sensors_off_outlined, color: Colors.white30, size: 64),
+            child: const Icon(Icons.sensors_off_outlined, color: Color(0xFFCBD5E1), size: 64),
           ),
           const SizedBox(height: 24),
           const Text(
             'Gateway Offline',
-            style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+            style: TextStyle(color: Color(0xFF1E293B), fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           const Text(
             'Select a connection protocol to start monitoring.',
-            style: TextStyle(color: Colors.white38, fontSize: 14),
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -2300,7 +2484,7 @@ void _showSettingsModal(BuildContext context) {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Connection Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      IconButton(icon: const Icon(Icons.close, color: Colors.white38), onPressed: () => Navigator.pop(context)),
+                      IconButton(icon: const Icon(Icons.close, color: Color(0xFF94A3B8)), onPressed: () => Navigator.pop(context)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -2329,7 +2513,7 @@ void _showSettingsModal(BuildContext context) {
                   if (gateway.type == ConnectionType.simulated)
                     Row(
                       children: [
-                        const Text('Simulated sensors:', style: TextStyle(color: Colors.white70)),
+                        const Text('Simulated sensors:', style: TextStyle(color: Color(0xFF64748B))),
                         const SizedBox(width: 12),
                         DropdownButton<int>(
                           value: gateway.simulatedSensorCount,
@@ -2380,18 +2564,18 @@ Widget _modalModeButton(GatewayProvider gateway, ConnectionType type, String lab
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           color: active ? accentColor.withOpacity(0.08) : Colors.transparent,
-          border: Border.all(color: active ? accentColor : Colors.white.withOpacity(0.05)),
+          border: Border.all(color: active ? accentColor : glassBorder),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
-            Icon(icon, color: active ? accentColor : Colors.white38, size: 20),
+            Icon(icon, color: active ? accentColor : const Color(0xFF64748B), size: 20),
             const SizedBox(height: 4),
             Text(
               label,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: active ? Colors.white : Colors.white54,
+                color: active ? accentColor : const Color(0xFF64748B),
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
