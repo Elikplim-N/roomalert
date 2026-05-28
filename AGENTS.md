@@ -15,7 +15,7 @@ A device reports 1–6 sensor ports. Disconnected ports = `temp: null, conn: fal
 
 - Firmware → Cloud (`POST`): `{ deviceId, timestamp, sensors: [{ temp, conn }] }`
 - Cloud → App (`GET /api/telemetry`): `{ readings: [{ timestamp, sensors: [{ port, temp, conn }] }] }`
-- Device → App direct (`GET /api/status`): `{ ports: [{ id, name, temp, conn }] }`
+- Device → App direct (`GET /api/status`): `{ deviceId, mac, fw, model, ports: [{ id, name, temp, conn }] }` (and other telemetry details)
 
 Changing any of these means changing the matching parse/serialize code in the
 other folders. Don't break the contract.

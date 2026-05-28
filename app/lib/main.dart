@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'dart:math' as math;
 import 'gateway_provider.dart';
 
 void main() {
@@ -184,7 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: 42,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [accentColor, Color(0xFF0072FF)],
+                    colors: [Color(0xFF0ABFBC), Color(0xFF2563EB)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -262,19 +261,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  gateway.type == ConnectionType.simulated
-                      ? 'Simulated Mode'
-                      : gateway.type == ConnectionType.wifi
-                          ? 'Direct AP Mode'
-                          : 'Worker Cloud Mode',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                const Text(
+                  'Direct LAN/AP Mode',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
                 ),
-                if (gateway.type == ConnectionType.wifi)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text('IP: ${gateway.ipAddress}', style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text('IP: ${gateway.ipAddress}', style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                ),
               ],
             ),
           ),
@@ -368,10 +362,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.1),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0ABFBC), Color(0xFF2563EB)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.thermostat, color: accentColor, size: 20),
+                  child: const Icon(Icons.thermostat, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 8),
                 const Text(
@@ -543,11 +541,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: _buildQuickStatCard(
                   Icons.dns_outlined,
                   'Gateway Node',
-                  gateway.type == ConnectionType.simulated
-                      ? 'SIMULATION'
-                      : gateway.type == ConnectionType.wifi
-                          ? 'LOCAL WI-FI'
-                          : 'CLOUDFLARE',
+                  'T-SENSE GW',
                   'Uplink operational',
                   warningColor,
                 ),
@@ -560,13 +554,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left Panel (Gauge + Sensor Grid + Relay Controller)
+              // Left Panel (Sensor Grid + Relay Controller)
               Expanded(
                 flex: 4,
                 child: Column(
                   children: [
-                    _buildGaugeCard(selectedPortData, gateway),
-                    const SizedBox(height: 16),
                     _buildPortsCard(gateway),
                     const SizedBox(height: 16),
                     _buildRelayCard(gateway),
@@ -594,8 +586,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Mobile / Tablet Stacked Layout
       return Column(
         children: [
-          _buildGaugeCard(selectedPortData, gateway),
-          const SizedBox(height: 16),
+
           _buildPortsCard(gateway),
           const SizedBox(height: 16),
           _buildRelayCard(gateway),
@@ -1030,23 +1021,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   onPressed: () async {
-                    if (gateway.type == ConnectionType.wifi) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Telemetry CSV log is hosted at http://${gateway.ipAddress}/api/sd/download'),
-                          action: SnackBarAction(
-                            label: 'Copy IP',
-                            textColor: Colors.white,
-                            onPressed: () {},
-                          ),
-                          behavior: SnackBarBehavior.floating,
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Telemetry CSV log is hosted at http://${gateway.ipAddress}/api/sd/download'),
+                        action: SnackBarAction(
+                          label: 'Copy IP',
+                          textColor: Colors.white,
+                          onPressed: () {},
                         ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Simulated CSV logs downloaded to memory cache!'), behavior: SnackBarBehavior.floating),
-                      );
-                    }
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.download, size: 16),
                   label: const Text('Download CSV Log', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -1271,156 +1256,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
           const SizedBox(height: 4),
           Text(description, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGaugeCard(SensorPort p, GatewayProvider gateway) {
-    final tempVal = p.temp ?? 0.0;
-    // Map 0 - 50 deg C to 0.0 - 1.0 progress
-    final double progress = (tempVal.clamp(0.0, 50.0)) / 50.0;
-    final isDisconn = !p.conn;
-    final isHot = !isDisconn && gateway.isHot(p.temp);
-    final isCold = !isDisconn && gateway.isCold(p.temp);
-    final isAlarm = isHot || isCold;
-
-    return Container(
-      width: double.infinity,
-      height: 330,
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: glassBorder),
-        boxShadow: [
-          BoxShadow(
-            color: (isDisconn
-                    ? Colors.transparent
-                    : isAlarm
-                        ? dangerColor
-                        : accentColor)
-                .withOpacity(0.02),
-            blurRadius: 40,
-            spreadRadius: 10,
-          ),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Visual Sweep Gauge Arc
-          Positioned(
-            top: 24,
-            child: SizedBox(
-              width: 250,
-              height: 250,
-              child: CustomPaint(
-                painter: GaugePainter(
-                  progress: isDisconn ? 0.0 : progress,
-                  color: isDisconn
-                      ? const Color(0xFFCBD5E1)
-                      : isAlarm
-                          ? dangerColor
-                          : accentColor,
-                ),
-              ),
-            ),
-          ),
-
-          // Central Reading Content
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              Text(
-                p.conn && p.temp != null ? p.temp!.toStringAsFixed(1) : '--.-',
-                style: const TextStyle(fontSize: 64, fontWeight: FontWeight.w900, color: Color(0xFF1E293B), height: 1.0),
-              ),
-              if (p.conn)
-                const Text(
-                  'DEGREES CELSIUS',
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF64748B), letterSpacing: 1.5),
-                ),
-              const SizedBox(height: 14),
-              // Status Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: (isDisconn
-                          ? const Color(0xFFCBD5E1)
-                          : isAlarm
-                              ? dangerColor
-                              : successColor)
-                      .withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: (isDisconn
-                            ? const Color(0xFFCBD5E1)
-                            : isAlarm
-                                ? dangerColor
-                                : successColor)
-                        .withOpacity(0.25),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isDisconn
-                          ? Icons.cloud_off
-                          : isAlarm
-                              ? Icons.warning_amber_rounded
-                              : Icons.check_circle_outline,
-                      color: isDisconn
-                          ? const Color(0xFF64748B)
-                          : isAlarm
-                              ? dangerColor
-                              : successColor,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      isDisconn
-                          ? 'DISCONNECTED'
-                          : isHot
-                              ? 'HIGH TEMP'
-                              : isCold
-                                  ? 'LOW TEMP'
-                                  : 'STABLE',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: isDisconn
-                            ? const Color(0xFF64748B)
-                            : isAlarm
-                                ? dangerColor
-                                : successColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Gauge Labels
-          const Positioned(
-            bottom: 20,
-            left: 36,
-            child: Text('0°C', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-          ),
-          Positioned(
-            bottom: 20,
-            child: Text(
-              p.name.toUpperCase(),
-              style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w800, letterSpacing: 1.0),
-            ),
-          ),
-          const Positioned(
-            bottom: 20,
-            right: 36,
-            child: Text('50°C', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-          ),
         ],
       ),
     );
@@ -1748,57 +1583,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Mode select tabs
-          const Text('Connection Protocol Mode', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildModeTabButton(gateway, ConnectionType.simulated, 'Simulated', Icons.science),
-              const SizedBox(width: 8),
-              _buildModeTabButton(gateway, ConnectionType.wifi, 'Direct Wi-Fi', Icons.wifi),
-              const SizedBox(width: 8),
-              _buildModeTabButton(gateway, ConnectionType.cloud, 'Cloud D1', Icons.cloud),
-            ],
-          ),
+          const Text('Connection Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
           const SizedBox(height: 24),
 
-          // Conditional forms
-          if (gateway.type == ConnectionType.simulated) ...[
-            const Text('Simulate multi-channel gateway', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text('Probes count:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(width: 16),
-                DropdownButton<int>(
-                  value: gateway.simulatedSensorCount,
-                  dropdownColor: cardColor,
-                  borderRadius: BorderRadius.circular(12),
-                  items: [
-                    for (int n = 1; n <= maxSensors; n++)
-                      DropdownMenuItem(value: n, child: Text('$n sensors')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) gateway.setSimulatedSensorCount(v);
-                  },
-                ),
-              ],
-            ),
-          ],
-
-          if (gateway.type == ConnectionType.wifi) ...[
-            _field('Device IP Address', gateway.ipAddress, gateway.setIpAddress),
-            const SizedBox(height: 12),
-            _field('Basic Auth Username', gateway.wifiUser, (v) => gateway.setWifiCredentials(v, gateway.wifiPass)),
-            const SizedBox(height: 12),
-            _field('Basic Auth Password', gateway.wifiPass, (v) => gateway.setWifiCredentials(gateway.wifiUser, v), obscure: true),
-          ],
-
-          if (gateway.type == ConnectionType.cloud) ...[
-            _field('Worker URL Endpoint', gateway.cloudUrl, gateway.setCloudUrl, hint: 'https://...workers.dev'),
-            const SizedBox(height: 12),
-            _field('Target Device ID', gateway.cloudDeviceId, gateway.setCloudDeviceId),
-          ],
+          _field('Device IP Address', gateway.ipAddress, gateway.setIpAddress),
+          const SizedBox(height: 12),
+          _field('Basic Auth Username', gateway.wifiUser, (v) => gateway.setWifiCredentials(v, gateway.wifiPass)),
+          const SizedBox(height: 12),
+          _field('Basic Auth Password', gateway.wifiPass, (v) => gateway.setWifiCredentials(gateway.wifiUser, v), obscure: true),
 
           const SizedBox(height: 32),
           SizedBox(
@@ -1823,40 +1615,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildModeTabButton(GatewayProvider gateway, ConnectionType type, String label, IconData icon) {
-    final isSel = gateway.type == type;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => gateway.setConnectionType(type),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSel ? accentColor.withOpacity(0.08) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSel ? accentColor : const Color(0xFFE2E8F0),
-              width: isSel ? 1.5 : 1.0,
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: isSel ? accentColor : const Color(0xFF64748B), size: 20),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSel ? accentColor : const Color(0xFF475569),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1918,72 +1676,7 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   }
 }
 
-// --- Custom Dial Gauge Painter ---
 
-class GaugePainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  GaugePainter({required this.progress, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.width / 2) - 8;
-
-    // Track Background arc
-    final bgPaint = Paint()
-      ..color = const Color(0xFFE2E8F0)
-      ..strokeWidth = 14
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    const startAngle = math.pi * 0.75;
-    const sweepAngle = math.pi * 1.5;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      startAngle,
-      sweepAngle,
-      false,
-      bgPaint,
-    );
-
-    // Active progress arc
-    final fgPaint = Paint()
-      ..shader = SweepGradient(
-        colors: [color.withOpacity(0.7), color],
-        startAngle: 0.0,
-        endAngle: math.pi * 2,
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..strokeWidth = 14
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      startAngle,
-      sweepAngle * progress,
-      false,
-      fgPaint,
-    );
-
-    // Glowing tip indicator
-    final tipAngle = startAngle + (sweepAngle * progress);
-    final tipX = center.dx + radius * math.cos(tipAngle);
-    final tipY = center.dy + radius * math.sin(tipAngle);
-
-    final glowPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    
-    canvas.drawCircle(Offset(tipX, tipY), 9, glowPaint);
-    canvas.drawCircle(Offset(tipX, tipY), 15, Paint()..color = color.withOpacity(0.15)..style = PaintingStyle.fill);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
 
 // --- Field Helpers ---
 
@@ -2074,7 +1767,7 @@ class AlertLogItem {
 class _PortRenameCard extends StatefulWidget {
   final SensorPort port;
   final GatewayProvider gateway;
-  const _PortRenameCard({required this.port, required this.gateway});
+  const _PortRenameCard({super.key, required this.port, required this.gateway});
 
   @override
   State<_PortRenameCard> createState() => _PortRenameCardState();
@@ -2208,7 +1901,7 @@ class _CalibrationRow extends StatefulWidget {
   final SensorPort port;
   final double offset;
   final GatewayProvider gateway;
-  const _CalibrationRow({required this.port, required this.offset, required this.gateway});
+  const _CalibrationRow({super.key, required this.port, required this.offset, required this.gateway});
 
   @override
   State<_CalibrationRow> createState() => _CalibrationRowState();
@@ -2487,48 +2180,12 @@ void _showSettingsModal(BuildContext context) {
                       IconButton(icon: const Icon(Icons.close, color: Color(0xFF94A3B8)), onPressed: () => Navigator.pop(context)),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _modalModeButton(gateway, ConnectionType.simulated, 'Simulated', Icons.science),
-                      const SizedBox(width: 8),
-                      _modalModeButton(gateway, ConnectionType.wifi, 'Direct Wi-Fi', Icons.wifi),
-                      const SizedBox(width: 8),
-                      _modalModeButton(gateway, ConnectionType.cloud, 'Cloud D1', Icons.cloud),
-                    ],
-                  ),
                   const SizedBox(height: 24),
-                  if (gateway.type == ConnectionType.wifi) ...[
-                    _field('Device IP Address', gateway.ipAddress, gateway.setIpAddress),
-                    const SizedBox(height: 12),
-                    _field('Username', gateway.wifiUser, (v) => gateway.setWifiCredentials(v, gateway.wifiPass)),
-                    const SizedBox(height: 12),
-                    _field('Password', gateway.wifiPass, (v) => gateway.setWifiCredentials(gateway.wifiUser, v), obscure: true),
-                  ],
-                  if (gateway.type == ConnectionType.cloud) ...[
-                    _field('Worker URL', gateway.cloudUrl, gateway.setCloudUrl, hint: 'https://...workers.dev'),
-                    const SizedBox(height: 12),
-                    _field('Device ID', gateway.cloudDeviceId, gateway.setCloudDeviceId),
-                  ],
-                  if (gateway.type == ConnectionType.simulated)
-                    Row(
-                      children: [
-                        const Text('Simulated sensors:', style: TextStyle(color: Color(0xFF64748B))),
-                        const SizedBox(width: 12),
-                        DropdownButton<int>(
-                          value: gateway.simulatedSensorCount,
-                          dropdownColor: cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          items: [
-                            for (int n = 1; n <= maxSensors; n++)
-                              DropdownMenuItem(value: n, child: Text('$n')),
-                          ],
-                          onChanged: (v) {
-                            if (v != null) gateway.setSimulatedSensorCount(v);
-                          },
-                        ),
-                      ],
-                    ),
+                  _field('Device IP Address', gateway.ipAddress, gateway.setIpAddress),
+                  const SizedBox(height: 12),
+                  _field('Username', gateway.wifiUser, (v) => gateway.setWifiCredentials(v, gateway.wifiPass)),
+                  const SizedBox(height: 12),
+                  _field('Password', gateway.wifiPass, (v) => gateway.setWifiCredentials(gateway.wifiUser, v), obscure: true),
                   const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
@@ -2552,38 +2209,6 @@ void _showSettingsModal(BuildContext context) {
         },
       );
     },
-  );
-}
-
-Widget _modalModeButton(GatewayProvider gateway, ConnectionType type, String label, IconData icon) {
-  final active = gateway.type == type;
-  return Expanded(
-    child: InkWell(
-      onTap: () => gateway.setConnectionType(type),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: active ? accentColor.withOpacity(0.08) : Colors.transparent,
-          border: Border.all(color: active ? accentColor : glassBorder),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: active ? accentColor : const Color(0xFF64748B), size: 20),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: active ? accentColor : const Color(0xFF64748B),
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
   );
 }
 
@@ -2641,28 +2266,8 @@ class _LoginScreenState extends State<_LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // White card container for the logo - matches screenshot
-                  Container(
-                    width: 170,
-                    height: 85,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: Colors.grey.withOpacity(0.12),
-                        width: 1.0,
-                      ),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: const RoomAlertLogo(),
-                  ),
+                  // T-Sense logo matching brand image
+                  const TSenseLogo(width: 220, height: 70),
                   const SizedBox(height: 36),
                   
                   // Main Header Title
@@ -2679,7 +2284,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                   
                   // Subtitle
                   const Text(
-                    'Sign in to your RoomAlert account',
+                    'Sign in to your T-Sense gateway',
                     style: TextStyle(
                       fontSize: 13.5,
                       color: Color(0xFF7E8B9B),
@@ -2861,173 +2466,78 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 }
 
-class RoomAlertLogo extends StatelessWidget {
+class TSenseLogo extends StatelessWidget {
   final double width;
   final double height;
-  const RoomAlertLogo({super.key, this.width = 160, this.height = 80});
+  const TSenseLogo({super.key, this.width = 220, this.height = 70});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
       height: height,
-      child: CustomPaint(
-        painter: _LogoPainter(
-          primaryColor: const Color(0xFF0F3661),
-          bgColor: Colors.white,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Rounded-square icon with teal-to-blue gradient
+          Container(
+            width: height * 0.78,
+            height: height * 0.78,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0ABFBC), Color(0xFF2563EB)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(height * 0.22),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0ABFBC).withOpacity(0.25),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.thermostat,
+              color: Colors.white,
+              size: height * 0.42,
+            ),
+          ),
+          SizedBox(width: height * 0.22),
+          // Text block
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'T-Sense',
+                style: TextStyle(
+                  fontSize: height * 0.38,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1E293B),
+                  letterSpacing: -0.5,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'GATEWAY NODE',
+                style: TextStyle(
+                  fontSize: height * 0.14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2.0,
+                  color: const Color(0xFF8A99AD),
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
-}
-
-class _LogoPainter extends CustomPainter {
-  final Color primaryColor;
-  final Color bgColor;
-
-  _LogoPainter({required this.primaryColor, required this.bgColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = primaryColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round;
-
-    final fillPaint = Paint()
-      ..color = primaryColor
-      ..style = PaintingStyle.fill;
-
-    final bgCardPaint = Paint()
-      ..color = bgColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    final double scaleX = size.width / 160.0;
-    final double scaleY = size.height / 80.0;
-    final double scale = math.min(scaleX, scaleY);
-
-    canvas.save();
-    final double dx = (size.width - 160 * scale) / 2;
-    final double dy = (size.height - 80 * scale) / 2;
-    canvas.translate(dx, dy);
-    canvas.scale(scale);
-
-    // 1. House main frame
-    final path1 = Path()
-      ..moveTo(10, 52)
-      ..lineTo(10, 32)
-      ..lineTo(40, 20)
-      ..lineTo(70, 32);
-    paint.strokeWidth = 2.5;
-    canvas.drawPath(path1, paint);
-
-    final path2 = Path()
-      ..moveTo(35, 52)
-      ..lineTo(10, 52);
-    canvas.drawPath(path2, paint);
-
-    // 2. Window inside the house
-    final rect = Rect.fromLTWH(22, 32, 16, 16);
-    canvas.drawRect(rect, fillPaint);
-
-    // Window grid lines
-    final gridPath = Path()
-      ..moveTo(30, 32)
-      ..lineTo(30, 48)
-      ..moveTo(22, 40)
-      ..lineTo(38, 40);
-    canvas.drawPath(gridPath, bgCardPaint);
-
-    // 3. Left antenna
-    final antLeft = Path()
-      ..moveTo(30, 23)
-      ..lineTo(30, 15)
-      ..lineTo(22, 15)
-      ..lineTo(22, 19);
-    paint.strokeWidth = 2.0;
-    canvas.drawPath(antLeft, paint);
-
-    // Left antenna circle
-    canvas.drawCircle(const Offset(22, 19), 3, fillPaint);
-
-    // 4. Right antenna
-    final antRight = Path()
-      ..moveTo(46, 23)
-      ..lineTo(46, 15)
-      ..lineTo(54, 15)
-      ..lineTo(54, 19);
-    canvas.drawPath(antRight, paint);
-
-    // Right antenna circle
-    canvas.drawCircle(const Offset(54, 19), 3, fillPaint);
-
-    // 5. Swoosh curve
-    final swoosh = Path()
-      ..moveTo(15, 62)
-      ..quadraticBezierTo(40, 10, 110, 42);
-    final swooshPaint = Paint()
-      ..color = primaryColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawPath(swoosh, swooshPaint);
-
-    // Text "RiCH"
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: 'RiCH',
-        style: TextStyle(
-          color: primaryColor,
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w300,
-          fontSize: 26,
-          letterSpacing: -1.0,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, const Offset(58, 16));
-
-    // Text "Advanced Technology" under RiCH
-    final subTextPainter = TextPainter(
-      text: TextSpan(
-        text: 'Advanced Technology',
-        style: TextStyle(
-          color: primaryColor.withOpacity(0.8),
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w400,
-          fontSize: 6.5,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    subTextPainter.layout();
-    subTextPainter.paint(canvas, const Offset(59, 44));
-
-    // Text "RoomAlert" underneath
-    final roomAlertPainter = TextPainter(
-      text: TextSpan(
-        text: 'RoomAlert',
-        style: TextStyle(
-          color: primaryColor,
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w900,
-          fontSize: 22,
-          letterSpacing: -0.5,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    roomAlertPainter.layout();
-    roomAlertPainter.paint(canvas, const Offset(15, 54));
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _CustomerDashboard extends StatelessWidget {
@@ -3146,7 +2656,24 @@ class _CustomerDashboard extends StatelessWidget {
 
   Widget _buildDeviceInfoCard(GatewayProvider gateway) {
     final ip = gateway.ipAddress.isEmpty ? '127.0.0.1' : gateway.ipAddress;
-    final deviceId = gateway.cloudDeviceId.isEmpty ? 'A1B2C3D4E5F6' : gateway.cloudDeviceId;
+    final model = gateway.modelName.isEmpty ? 'T-Sense GW' : gateway.modelName;
+    final fw = gateway.fwVersion.isEmpty ? '--' : gateway.fwVersion;
+    final deviceId = gateway.deviceId.isEmpty ? 'A1B2C3D4E5F6' : gateway.deviceId;
+    final mac = gateway.macAddress.isEmpty ? '--' : gateway.macAddress;
+
+    String lastSeenStr = 'Never';
+    if (gateway.lastSeen != null) {
+      final diff = DateTime.now().difference(gateway.lastSeen!);
+      if (diff.inSeconds < 5) {
+        lastSeenStr = 'Just now';
+      } else if (diff.inSeconds < 60) {
+        lastSeenStr = '${diff.inSeconds}s ago';
+      } else if (diff.inMinutes < 60) {
+        lastSeenStr = '${diff.inMinutes}m ago';
+      } else {
+        lastSeenStr = '${diff.inHours}h ago';
+      }
+    }
 
     return Container(
       width: double.infinity,
@@ -3175,13 +2702,15 @@ class _CustomerDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _buildInfoRow('Model', 'RoomAlert-2W'),
+          _buildInfoRow('Model', model),
           const SizedBox(height: 10),
-          _buildInfoRow('Firmware', '--'),
+          _buildInfoRow('Firmware', fw),
           const SizedBox(height: 10),
           _buildInfoRow('IP Address', ip),
           const SizedBox(height: 10),
-          _buildInfoRow('Last Seen', '1h ago'),
+          _buildInfoRow('MAC Address', mac),
+          const SizedBox(height: 10),
+          _buildInfoRow('Last Seen', lastSeenStr),
           const SizedBox(height: 10),
           _buildInfoRow('Device ID', deviceId),
         ],

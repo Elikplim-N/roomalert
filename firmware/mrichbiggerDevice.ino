@@ -29,8 +29,10 @@ static_assert(NUM_SENSORS >= 1 && NUM_SENSORS <= MAX_SENSORS,
 // router (STA mode); AP-only operation stays fully local. Leave CLOUD_URL
 // empty to disable cloud uploads entirely.
 #define CLOUD_URL ""                       // e.g. "https://roomalert-receiver.<acct>.workers.dev"
-#define CLOUD_DEVICE_ID "roomalert-6w-01"  // unique id for this unit in the cloud DB
+#define CLOUD_DEVICE_ID "roomAlert-5W"  // unique id for this unit in the cloud DB
 #define CLOUD_UPLOAD_INTERVAL_MS 60000UL   // how often to push (default 60s)
+#define FW_VERSION "1.0.0"
+#define MODEL_NAME "roomAlert-5W"
 
 String cloudUrl = CLOUD_URL;
 String cloudDeviceId = CLOUD_DEVICE_ID;
@@ -196,6 +198,10 @@ void setupServer() {
     int percentUsed = (totalSpace > 0) ? (usedSpace * 100) / totalSpace : 0;
 
     String json = "{";
+    json += "\"deviceId\":\"" + cloudDeviceId + "\",";
+    json += "\"mac\":\"" + WiFi.macAddress() + "\",";
+    json += "\"fw\":\"" + String(FW_VERSION) + "\",";
+    json += "\"model\":\"" + String(MODEL_NAME) + "\",";
     json += "\"time\":\"" + String(cachedTime) + "\",";
     json += "\"uptime\":" + String(uptimeSecs) + ",";
     json += "\"sd\":{\"cap\":" + String((unsigned long)cardSize) +
