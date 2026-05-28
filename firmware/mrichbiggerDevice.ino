@@ -28,7 +28,7 @@ static_assert(NUM_SENSORS >= 1 && NUM_SENSORS <= MAX_SENSORS,
 // app can view this unit remotely. Uploads only happen when connected to a
 // router (STA mode); AP-only operation stays fully local. Leave CLOUD_URL
 // empty to disable cloud uploads entirely.
-#define CLOUD_URL ""                       // e.g. "https://roomalert-receiver.<acct>.workers.dev"
+#define CLOUD_URL "https://roomalert-receiver.elikplim-iot.workers.dev"                       // e.g. "https://roomalert-receiver.<acct>.workers.dev"
 #define CLOUD_DEVICE_ID "roomAlert-5W"  // unique id for this unit in the cloud DB
 #define CLOUD_UPLOAD_INTERVAL_MS 60000UL   // how often to push (default 60s)
 #define FW_VERSION "1.0.0"
