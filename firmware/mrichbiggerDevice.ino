@@ -62,7 +62,7 @@ void loadCloudConfig() {
 // ---------------------------------------------------------------------------
 // Hardware Pin Definitions
 // ---------------------------------------------------------------------------
-const uint8_t SENSOR_PINS[MAX_SENSORS] = {13, 14, 27, 16, 17, 4};
+const uint8_t SENSOR_PINS[MAX_SENSORS] = {13, 14, 27, 16, 4, 17};
 #define RELAY_PIN 33              // moved from DAC pin 25 → plain GPIO 33
 #define RELAY_ACTIVE_LOW true   // CONFIRMED: relay triggers on LOW (active-low board)
 #define RELAY_ON  (RELAY_ACTIVE_LOW ? LOW  : HIGH)
