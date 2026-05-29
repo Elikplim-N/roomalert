@@ -17,7 +17,7 @@
 // NUM_SENSORS is the active port count for THIS device variant — the only
 // line to change to build a 2W/5W/6W unit. Must be between 1 and MAX_SENSORS.
 #define MAX_SENSORS 6
-#define NUM_SENSORS 6
+#define NUM_SENSORS 5
 static_assert(NUM_SENSORS >= 1 && NUM_SENSORS <= MAX_SENSORS,
               "NUM_SENSORS must be between 1 and MAX_SENSORS");
 
