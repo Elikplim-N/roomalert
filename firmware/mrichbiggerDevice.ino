@@ -528,8 +528,11 @@ void setup() {
   Serial.println("\n--- [System Booting] ---");
 
   // 0. Initialize Sensors & Outputs
+  Serial.println("[SENSORS] Initializing buses...");
   for (int i = 0; i < NUM_SENSORS; i++) {
     sensors[i].begin();
+    int count = sensors[i].getDeviceCount();
+    Serial.printf("  - Port %d (%s on GPIO %d): Found %d device(s)\n", i + 1, zoneNames[i].c_str(), SENSOR_PINS[i], count);
     sensors[i].setWaitForConversion(false); // Non-blocking!
     sensors[i].requestTemperatures();       // Start the first 750ms conversion
     currentTemps[i] = -127.0;               // Assume disconnected at boot
@@ -616,17 +619,27 @@ void loop() {
 
   // Update Sensors every 2 seconds (Non-blocking & Hot-swappable)
   if (millis() - lastUpdate > 2000) {
+    Serial.println("\n--- [Sensor Telemetry] ---");
     for (int i = 0; i < NUM_SENSORS; i++) {
       // 1. Read the conversion requested 2 seconds ago
       float t = sensors[i].getTempCByIndex(0);
       currentTemps[i] = (t == DEVICE_DISCONNECTED_C) ? -127.0 : (t + sensorOffsets[i]);
 
-      // 2. Re-scan bus to detect newly plugged/unplugged sensors (Hot-swap!)
+      // 2. Scan and print bus device count and temperature
+      int devCount = sensors[i].getDeviceCount();
+      Serial.printf("  - Port %d (%s on GPIO %d): ", i + 1, zoneNames[i].c_str(), SENSOR_PINS[i]);
+      if (currentTemps[i] <= -100.0) {
+        Serial.printf("DISCONNECTED (Devices found on bus: %d)\n", devCount);
+      } else {
+        Serial.printf("%.2f C (Devices found on bus: %d)\n", currentTemps[i], devCount);
+      }
+
+      // 3. Re-scan bus to detect newly plugged/unplugged sensors (Hot-swap!)
       sensors[i].begin();
       sensors[i].setWaitForConversion(
           false); // begin() resets this to true, so we MUST disable it again
 
-      // 3. Request the NEXT conversion (takes 750ms in the background)
+      // 4. Request the NEXT conversion (takes 750ms in the background)
       sensors[i].requestTemperatures();
     }
 
